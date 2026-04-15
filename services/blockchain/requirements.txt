@@ -1,0 +1,11 @@
+solana==0.30.2
+solders==0.18.1
+anchorpy==0.18.0
+
+# HTTP客户端
+httpx==0.25.2
+aiohttp==3.9.1
+
+# 工具
+python-dotenv==1.0.0
+pydantic==2.5.0

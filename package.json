@@ -1,0 +1,53 @@
+{
+  "name": "solon-ai",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "clean": "turbo run clean && rm -rf node_modules",
+    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
+    "prepare": "husky"
+  },
+  "dependencies": {
+    "rxjs": "^7.8.1",
+    "viem": "^2.0.0"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^18.6.1",
+    "@commitlint/config-conventional": "^18.6.3",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.5.2",
+    "prettier": "^3.0.0",
+    "turbo": "^1.10.0"
+  },
+  "lint-staged": {
+    "apps/web/**/*.{ts,tsx,js,jsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "apps/web/**/*.{json,css,md}": [
+      "prettier --write"
+    ],
+    "apps/api/**/*.py": [
+      "black",
+      "isort",
+      "flake8"
+    ],
+    "services/**/*.py": [
+      "black",
+      "isort",
+      "flake8"
+    ]
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  }
+}

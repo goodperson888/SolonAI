@@ -1,0 +1,13 @@
+# Code formatting
+black==23.12.1
+
+# Code linting
+flake8==7.0.0
+flake8-bugbear==23.12.2
+flake8-comprehensions==3.14.0
+
+# Import sorting
+isort==5.13.2
+
+# Type checking (optional)
+mypy==1.8.0

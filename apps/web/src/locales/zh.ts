@@ -1,0 +1,114 @@
+// 中文翻译
+export const zh = {
+  nav: {
+    dashboard: '资产总览',
+    strategy: '策略中心',
+    settings: '设置',
+  },
+  wallet: {
+    connect: '连接钱包',
+    connected: '已连接',
+    disconnect: '断开连接',
+    balance: '余额',
+    viewAssets: '查看资产',
+  },
+  landing: {
+    hero: {
+      title: '你的Solana资产专属AI管家',
+      subtitle: '非托管、智能化、全自动的DeFi资产管理平台',
+      cta: '连接钱包开始',
+      learnMore: '了解更多',
+    },
+    features: {
+      title: '为什么选择Solon AI',
+      ai: {
+        title: 'AI智能决策',
+        description: '8个专业AI智能体协同工作，为你提供最优策略',
+      },
+      nonCustodial: {
+        title: '非托管安全',
+        description: '资产始终在你的钱包中，我们不触碰你的私钥',
+      },
+      automated: {
+        title: '全自动执行',
+        description: '一键执行复杂的DeFi操作，无需手动操作',
+      },
+      realtime: {
+        title: '实时监控',
+        description: '24/7监控你的资产，异常情况及时预警',
+      },
+    },
+    howItWorks: {
+      title: '如何使用',
+      step1: {
+        title: '连接钱包',
+        description: '使用Phantom或其他Solana钱包连接',
+      },
+      step2: {
+        title: 'AI分析资产',
+        description: 'AI自动分析你的资产结构和风险',
+      },
+      step3: {
+        title: '生成策略',
+        description: '根据你的风险偏好生成最优策略',
+      },
+      step4: {
+        title: '一键执行',
+        description: '确认后自动执行，坐享收益',
+      },
+    },
+    cta: {
+      title: '立即开始，零门槛享受DeFi收益',
+      button: '连接钱包',
+    },
+  },
+  dashboard: {
+    title: '资产总览',
+    totalValue: '总资产价值',
+    todayProfit: '今日收益',
+    activeStrategies: '活跃策略',
+    riskLevel: '风险等级',
+    assets: '我的资产',
+    aiChat: 'AI助手',
+    chatPlaceholder: '问我任何关于你资产的问题...',
+    send: '发送',
+  },
+  strategy: {
+    title: '策略中心',
+    generate: '生成策略',
+    amount: '投资金额',
+    token: '选择代币',
+    riskLevel: '风险偏好',
+    conservative: '保守',
+    balanced: '稳健',
+    aggressive: '进取',
+    duration: '投资期限',
+    days: '天',
+    generateButton: '生成策略',
+    recommended: '推荐策略',
+    expectedAPY: '预期APY',
+    risk: '风险等级',
+    lockPeriod: '锁仓期',
+    none: '无',
+    viewDetails: '查看详情',
+    execute: '一键执行',
+  },
+  settings: {
+    title: '设置',
+    language: '语言',
+    theme: '主题',
+    notifications: '通知',
+    security: '安全',
+  },
+  common: {
+    loading: '加载中...',
+    error: '错误',
+    success: '成功',
+    cancel: '取消',
+    confirm: '确认',
+    save: '保存',
+    low: '低',
+    medium: '中',
+    high: '高',
+  },
+}

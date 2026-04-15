@@ -1,0 +1,23 @@
+langchain==0.1.0
+langchain-community==0.0.10
+langgraph==0.0.20
+langsmith==0.0.77
+
+# 大模型
+openai==1.6.1
+anthropic==0.8.1
+
+# 向量数据库
+pinecone-client==3.0.0
+chromadb==0.4.22
+
+# 文档处理
+pypdf==3.17.4
+python-docx==1.1.0
+beautifulsoup4==4.12.2
+markdown==3.5.1
+
+# 工具
+pydantic==2.5.0
+python-dotenv==1.0.0
+httpx==0.25.2
