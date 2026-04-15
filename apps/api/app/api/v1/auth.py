@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 router = APIRouter()
 
+
 @router.post("/login")
 async def login():
     """
@@ -10,6 +11,7 @@ async def login():
     TODO: 实现钱包签名验证登录逻辑
     """
     return {"message": "登录接口 - 待实现"}
+
 
 @router.post("/verify")
 async def verify_wallet():

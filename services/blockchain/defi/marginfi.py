@@ -2,7 +2,8 @@
 MarginFi借贷协议集成
 提供存款、借款、查询等功能
 """
-from typing import Dict, List, Any, Optional
+
+from typing import Any, Dict, List, Optional
 
 
 class MarginFiClient:
@@ -36,7 +37,7 @@ class MarginFiClient:
             "borrows": [],
             "health_factor": 0.0,
             "total_deposit_value": 0.0,
-            "total_borrow_value": 0.0
+            "total_borrow_value": 0.0,
         }
 
     async def get_lending_pools(self) -> List[Dict[str, Any]]:
@@ -50,10 +51,7 @@ class MarginFiClient:
         return []
 
     def build_deposit_instruction(
-        self,
-        user_address: str,
-        token_mint: str,
-        amount: int
+        self, user_address: str, token_mint: str, amount: int
     ) -> Dict[str, Any]:
         """
         构建存款指令
@@ -69,18 +67,11 @@ class MarginFiClient:
         # TODO: 实现存款指令构建
         return {
             "instruction": "deposit",
-            "params": {
-                "user": user_address,
-                "mint": token_mint,
-                "amount": amount
-            }
+            "params": {"user": user_address, "mint": token_mint, "amount": amount},
         }
 
     def build_borrow_instruction(
-        self,
-        user_address: str,
-        token_mint: str,
-        amount: int
+        self, user_address: str, token_mint: str, amount: int
     ) -> Dict[str, Any]:
         """
         构建借款指令
@@ -96,9 +87,5 @@ class MarginFiClient:
         # TODO: 实现借款指令构建
         return {
             "instruction": "borrow",
-            "params": {
-                "user": user_address,
-                "mint": token_mint,
-                "amount": amount
-            }
+            "params": {"user": user_address, "mint": token_mint, "amount": amount},
         }

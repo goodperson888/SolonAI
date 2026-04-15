@@ -3,8 +3,7 @@
 职责：实时获取链上数据，包括用户钱包资产、持仓、授权记录、DeFi协议实时APY、链上风险黑名单、交易数据
 """
 
-from typing import Dict, List, Any
-from langchain_core.messages import HumanMessage, SystemMessage
+from typing import Dict
 
 
 class DataAggregationAgent:
@@ -51,12 +50,12 @@ class DataAggregationAgent:
         wallet_data = {
             "address": wallet_address,
             "balances": {},  # {token_mint: {amount, usd_value, token_info}}
-            "nfts": [],      # [{mint, name, collection, floor_price}]
+            "nfts": [],  # [{mint, name, collection, floor_price}]
             "lp_positions": [],  # [{protocol, pool, amount, value}]
             "lending_positions": [],  # [{protocol, supplied, borrowed, health}]
             "authorizations": [],  # [{program, authority, risk_level}]
             "total_value_usd": 0.0,
-            "last_updated": None
+            "last_updated": None,
         }
 
         state["wallet_data"] = wallet_data
@@ -81,9 +80,9 @@ class DataAggregationAgent:
 
         defi_data = {
             "lending_protocols": {},  # {protocol_name: {supply_apy, borrow_apy, tvl}}
-            "liquidity_pools": {},    # {pool_id: {apy, tvl, volume_24h}}
+            "liquidity_pools": {},  # {pool_id: {apy, tvl, volume_24h}}
             "staking_protocols": {},  # {protocol_name: {apy, tvl, lock_period}}
-            "last_updated": None
+            "last_updated": None,
         }
 
         state["defi_data"] = defi_data
@@ -111,7 +110,7 @@ class DataAggregationAgent:
             "risky_tokens": {},  # {token_mint: risk_info}
             "phishing_patterns": [],  # 钓鱼特征
             "protocol_audits": {},  # {protocol: audit_info}
-            "last_updated": None
+            "last_updated": None,
         }
 
         state["risk_data"] = risk_data

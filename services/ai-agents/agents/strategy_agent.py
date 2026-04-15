@@ -1,5 +1,7 @@
+from typing import Any, Dict
+
 from langchain.prompts import ChatPromptTemplate
-from typing import Dict, Any
+
 
 class StrategyAgent:
     """
@@ -19,8 +21,11 @@ class StrategyAgent:
 
     def _load_prompt(self) -> ChatPromptTemplate:
         """加载Prompt模板"""
-        return ChatPromptTemplate.from_messages([
-            ("system", """你是Solana DeFi策略专家，负责生成安全、可落地的投资策略。
+        return ChatPromptTemplate.from_messages(
+            [
+                (
+                    "system",
+                    """你是Solana DeFi策略专家，负责生成安全、可落地的投资策略。
 
 你需要：
 1. 根据用户的风险偏好和资金规模，推荐合适的DeFi协议
@@ -33,14 +38,13 @@ class StrategyAgent:
 - Raydium（流动性挖矿）：年化8-20%，风险中低
 - Kamino（质押）：年化5-12%，风险低
 
-请以JSON格式返回策略。"""),
-            ("user", "{input}")
-        ])
+请以JSON格式返回策略。""",
+                ),
+                ("user", "{input}"),
+            ]
+        )
 
-    async def generate_strategy(
-        self,
-        user_input: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def generate_strategy(self, user_input: Dict[str, Any]) -> Dict[str, Any]:
         """
         生成投资策略
 
@@ -66,10 +70,7 @@ class StrategyAgent:
             "name": "MarginFi稳健生息策略",
             "risk_level": "conservative",
             "expected_apy": "4.2%",
-            "steps": [
-                "将SOL存入MarginFi",
-                "开始赚取利息"
-            ]
+            "steps": ["将SOL存入MarginFi", "开始赚取利息"],
         }
 
     def _validate_input(self, user_input: Dict[str, Any]):

@@ -3,8 +3,9 @@
 职责：7*24小时监控用户已部署的策略、持仓、授权风险，触发预警条件时自动生成预警信息与处置方案
 """
 
-from typing import Dict, List, Any
 from datetime import datetime
+from typing import Dict
+
 from langchain_core.messages import HumanMessage, SystemMessage
 
 
@@ -59,7 +60,7 @@ class MonitoringAgent:
             "actual_apy": 0.0,
             "alerts": [],  # 预警列表
             "suggestions": [],  # 调仓建议
-            "last_checked": datetime.now().isoformat()
+            "last_checked": datetime.now().isoformat(),
         }
 
         state["monitoring_result"] = monitoring_result
@@ -90,13 +91,15 @@ class MonitoringAgent:
         for position in wallet_data.get("lending_positions", []):
             health_factor = position.get("health", 1.0)
             if health_factor < 1.2:
-                risk_alerts.append({
-                    "type": "lending_risk",
-                    "severity": "critical",
-                    "message": f"借贷健康度过低 ({health_factor:.2f})，有清算风险",
-                    "suggestion": "建议立即补充抵押品或偿还部分借款",
-                    "protocol": position.get("protocol")
-                })
+                risk_alerts.append(
+                    {
+                        "type": "lending_risk",
+                        "severity": "critical",
+                        "message": f"借贷健康度过低 ({health_factor:.2f})，有清算风险",
+                        "suggestion": "建议立即补充抵押品或偿还部分借款",
+                        "protocol": position.get("protocol"),
+                    }
+                )
 
         state["risk_alerts"] = risk_alerts
         return state
@@ -134,7 +137,8 @@ class MonitoringAgent:
         """
         messages = [
             SystemMessage(content=self.system_prompt),
-            HumanMessage(content=f"""
+            HumanMessage(
+                content=f"""
 请将以下预警信息翻译成大白话，让普通用户能看懂：
 
 预警类型: {alert.get('type')}
@@ -147,7 +151,8 @@ class MonitoringAgent:
 2. 明确告知风险和后果
 3. 提供具体的操作建议
 4. 语气友好但严肃
-""")
+"""
+            ),
         ]
 
         # TODO: AI团队调用大模型生成用户友好的消息

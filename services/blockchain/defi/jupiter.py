@@ -2,9 +2,10 @@
 Jupiter聚合交易协议集成
 提供代币兑换、路由查询等功能
 """
+
+from typing import Any, Dict, List
+
 import httpx
-from typing import Dict, List, Any, Optional
-import os
 
 
 class JupiterClient:
@@ -16,11 +17,7 @@ class JupiterClient:
         self.client = httpx.AsyncClient(timeout=30.0)
 
     async def get_quote(
-        self,
-        input_mint: str,
-        output_mint: str,
-        amount: int,
-        slippage_bps: int = 50
+        self, input_mint: str, output_mint: str, amount: int, slippage_bps: int = 50
     ) -> Dict[str, Any]:
         """
         获取兑换报价
@@ -39,7 +36,7 @@ class JupiterClient:
                 "inputMint": input_mint,
                 "outputMint": output_mint,
                 "amount": amount,
-                "slippageBps": slippage_bps
+                "slippageBps": slippage_bps,
             }
 
             response = await self.client.get(f"{self.BASE_URL}/quote", params=params)
@@ -49,9 +46,7 @@ class JupiterClient:
             raise Exception(f"获取Jupiter报价失败: {str(e)}")
 
     async def get_swap_transaction(
-        self,
-        quote: Dict[str, Any],
-        user_public_key: str
+        self, quote: Dict[str, Any], user_public_key: str
     ) -> Dict[str, Any]:
         """
         获取兑换交易数据
@@ -67,7 +62,7 @@ class JupiterClient:
             payload = {
                 "quoteResponse": quote,
                 "userPublicKey": user_public_key,
-                "wrapAndUnwrapSol": True
+                "wrapAndUnwrapSol": True,
             }
 
             response = await self.client.post(f"{self.BASE_URL}/swap", json=payload)

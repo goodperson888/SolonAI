@@ -2,12 +2,14 @@
 Solana RPC客户端封装
 提供与Solana区块链交互的基础功能
 """
+
+import os
+from typing import Any, Dict, List, Optional
+
 from solana.rpc.async_api import AsyncClient
 from solana.rpc.commitment import Confirmed
 from solders.pubkey import Pubkey
 from solders.signature import Signature
-from typing import Optional, List, Dict, Any
-import os
 
 
 class SolanaRPCClient:
@@ -55,18 +57,20 @@ class SolanaRPCClient:
             pubkey = Pubkey.from_string(address)
             response = await self.client.get_token_accounts_by_owner_json_parsed(
                 pubkey,
-                {"programId": Pubkey.from_string("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")}
+                {"programId": Pubkey.from_string("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")},
             )
 
             accounts = []
             if response.value:
                 for account in response.value:
                     info = account.account.data.parsed["info"]
-                    accounts.append({
-                        "mint": info["mint"],
-                        "balance": float(info["tokenAmount"]["uiAmount"]),
-                        "decimals": info["tokenAmount"]["decimals"]
-                    })
+                    accounts.append(
+                        {
+                            "mint": info["mint"],
+                            "balance": float(info["tokenAmount"]["uiAmount"]),
+                            "decimals": info["tokenAmount"]["decimals"],
+                        }
+                    )
 
             return accounts
         except Exception as e:
@@ -91,7 +95,7 @@ class SolanaRPCClient:
                     "slot": response.value.slot,
                     "blockTime": response.value.block_time,
                     "meta": response.value.transaction.meta,
-                    "transaction": response.value.transaction.transaction
+                    "transaction": response.value.transaction.transaction,
                 }
             return None
         except Exception as e:
