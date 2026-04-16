@@ -2,22 +2,22 @@
 const nextConfig = {
   reactStrictMode: true,
   transpilePackages: ['@solon-ai/ui', '@solon-ai/types', '@solon-ai/utils'],
-  // 跳过错误页面的静态生成
-  experimental: {
-    missingSuspenseWithCSRBailout: false,
-  },
   env: {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000',
     NEXT_PUBLIC_SOLANA_RPC_URL:
       process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.devnet.solana.com',
     NEXT_PUBLIC_WALLET_ADAPTER_NETWORK: process.env.NEXT_PUBLIC_WALLET_ADAPTER_NETWORK || 'devnet',
   },
-  // 允许构建时出现错误页面预渲染失败
-  typescript: {
-    ignoreBuildErrors: false,
-  },
-  eslint: {
-    ignoreDuringBuilds: false,
+  // 配置 webpack 以避免 styled-jsx 在 SSR 时的问题
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      // 服务端渲染时排除某些模块
+      config.externals = config.externals || []
+      config.externals.push({
+        'styled-jsx': 'styled-jsx',
+      })
+    }
+    return config
   },
 }
 
