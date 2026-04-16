@@ -1,6 +1,7 @@
 'use client'
 
 import { FC, ReactNode, useMemo } from 'react'
+import dynamic from 'next/dynamic'
 import {
   ConnectionProvider,
   WalletProvider as SolanaWalletProvider,
@@ -10,15 +11,13 @@ import { PhantomWalletAdapter, SolflareWalletAdapter } from '@solana/wallet-adap
 import { WalletModalProvider } from '@solana/wallet-adapter-react-ui'
 import { clusterApiUrl } from '@solana/web3.js'
 
-// 导入钱包样式
-require('@solana/wallet-adapter-react-ui/styles.css')
+import '@solana/wallet-adapter-react-ui/styles.css'
 
 interface WalletProviderProps {
   children: ReactNode
 }
 
-export const WalletProvider: FC<WalletProviderProps> = ({ children }) => {
-  // 配置网络
+const WalletProviderInner: FC<WalletProviderProps> = ({ children }) => {
   const network =
     (process.env.NEXT_PUBLIC_WALLET_ADAPTER_NETWORK as WalletAdapterNetwork) ||
     WalletAdapterNetwork.Devnet
@@ -29,7 +28,6 @@ export const WalletProvider: FC<WalletProviderProps> = ({ children }) => {
     return clusterApiUrl(network)
   }, [network])
 
-  // 配置支持的钱包
   const wallets = useMemo(() => [new PhantomWalletAdapter(), new SolflareWalletAdapter()], [])
 
   return (
@@ -40,3 +38,7 @@ export const WalletProvider: FC<WalletProviderProps> = ({ children }) => {
     </ConnectionProvider>
   )
 }
+
+export const WalletProvider = dynamic(() => Promise.resolve(WalletProviderInner), {
+  ssr: false,
+})

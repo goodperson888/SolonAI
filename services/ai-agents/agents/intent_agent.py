@@ -1,6 +1,7 @@
+from typing import Any, Dict
+
 from langchain.prompts import ChatPromptTemplate
-from langchain.schema import BaseMessage
-from typing import Dict, Any, List
+
 
 class IntentAgent:
     """
@@ -18,8 +19,11 @@ class IntentAgent:
 
     def _load_prompt(self) -> ChatPromptTemplate:
         """加载Prompt模板"""
-        return ChatPromptTemplate.from_messages([
-            ("system", """你是Solana DeFi专家，负责理解用户的投资需求。
+        return ChatPromptTemplate.from_messages(
+            [
+                (
+                    "system",
+                    """你是Solana DeFi专家，负责理解用户的投资需求。
 
 你需要从用户输入中提取：
 1. 用户意图（查询资产、生成策略、执行交易等）
@@ -27,9 +31,11 @@ class IntentAgent:
 3. 资金规模
 4. 其他约束条件
 
-请以JSON格式返回结果。"""),
-            ("user", "{input}")
-        ])
+请以JSON格式返回结果。""",
+                ),
+                ("user", "{input}"),
+            ]
+        )
 
     async def understand_intent(self, user_input: str) -> Dict[str, Any]:
         """
@@ -45,15 +51,12 @@ class IntentAgent:
         """
         # 调用LLM
         messages = self.prompt.format_messages(input=user_input)
-        response = await self.llm.ainvoke(messages)
+        await self.llm.ainvoke(messages)
 
         # 解析响应
         # TODO: 添加结果验证和错误处理
 
         return {
             "intent": "generate_strategy",
-            "parameters": {
-                "risk_level": "conservative",
-                "amount": 100
-            }
+            "parameters": {"risk_level": "conservative", "amount": 100},
         }

@@ -2,10 +2,12 @@
 交易构建工具
 提供交易构建、序列化等功能
 """
+
+from typing import Any, Dict, List
+
 from solana.transaction import Transaction
+from solders.instruction import AccountMeta, Instruction
 from solders.pubkey import Pubkey
-from solders.instruction import Instruction, AccountMeta
-from typing import List, Dict, Any
 
 
 class TransactionBuilder:
@@ -13,9 +15,7 @@ class TransactionBuilder:
 
     @staticmethod
     def build_transaction(
-        instructions: List[Instruction],
-        payer: Pubkey,
-        recent_blockhash: str
+        instructions: List[Instruction], payer: Pubkey, recent_blockhash: str
     ) -> Transaction:
         """
         构建交易
@@ -39,9 +39,7 @@ class TransactionBuilder:
 
     @staticmethod
     def create_instruction(
-        program_id: str,
-        accounts: List[Dict[str, Any]],
-        data: bytes
+        program_id: str, accounts: List[Dict[str, Any]], data: bytes
     ) -> Instruction:
         """
         创建指令
@@ -58,15 +56,13 @@ class TransactionBuilder:
             AccountMeta(
                 pubkey=Pubkey.from_string(acc["pubkey"]),
                 is_signer=acc.get("is_signer", False),
-                is_writable=acc.get("is_writable", False)
+                is_writable=acc.get("is_writable", False),
             )
             for acc in accounts
         ]
 
         return Instruction(
-            program_id=Pubkey.from_string(program_id),
-            accounts=account_metas,
-            data=data
+            program_id=Pubkey.from_string(program_id), accounts=account_metas, data=data
         )
 
     @staticmethod

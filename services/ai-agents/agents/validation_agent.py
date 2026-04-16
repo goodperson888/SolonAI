@@ -3,7 +3,8 @@
 职责：所有智能体的输出结果都需经过该Agent校验，确保内容准确、无幻觉、符合用户需求、合规要求
 """
 
-from typing import Dict, List, Any
+from typing import Dict, List
+
 from langchain_core.messages import HumanMessage, SystemMessage
 
 
@@ -53,12 +54,7 @@ class ValidationAgent:
         # 5. 检查是否有幻觉内容（虚构的协议、不存在的功能）
         # 6. 检查合规性（是否有保本承诺、投资建议等违规内容）
 
-        validation_result = {
-            "is_valid": True,
-            "errors": [],
-            "warnings": [],
-            "suggestions": []
-        }
+        validation_result = {"is_valid": True, "errors": [], "warnings": [], "suggestions": []}
 
         # 示例：校验协议名称
         protocol_name = strategy.get("protocol")
@@ -67,20 +63,24 @@ class ValidationAgent:
             protocol_info = await self._check_protocol_exists(protocol_name)
             if not protocol_info:
                 validation_result["is_valid"] = False
-                validation_result["errors"].append({
-                    "field": "protocol",
-                    "message": f"协议 '{protocol_name}' 不存在或未被支持",
-                    "action": "reject"
-                })
+                validation_result["errors"].append(
+                    {
+                        "field": "protocol",
+                        "message": f"协议 '{protocol_name}' 不存在或未被支持",
+                        "action": "reject",
+                    }
+                )
 
         # 示例：校验APY合理性
         expected_apy = strategy.get("expected_apy", 0)
         if expected_apy > 100:  # APY超过100%需要特别警惕
-            validation_result["warnings"].append({
-                "field": "expected_apy",
-                "message": f"APY {expected_apy}% 异常高，可能存在风险",
-                "action": "warn_user"
-            })
+            validation_result["warnings"].append(
+                {
+                    "field": "expected_apy",
+                    "message": f"APY {expected_apy}% 异常高，可能存在风险",
+                    "action": "warn_user",
+                }
+            )
 
         # 示例：检查合规性
         description = strategy.get("description", "")
@@ -88,11 +88,13 @@ class ValidationAgent:
         for word in forbidden_words:
             if word in description:
                 validation_result["is_valid"] = False
-                validation_result["errors"].append({
-                    "field": "description",
-                    "message": f"包含违规词汇 '{word}'，违反合规要求",
-                    "action": "rewrite"
-                })
+                validation_result["errors"].append(
+                    {
+                        "field": "description",
+                        "message": f"包含违规词汇 '{word}'，违反合规要求",
+                        "action": "rewrite",
+                    }
+                )
 
         state["validation_result"] = validation_result
         return state
@@ -107,19 +109,13 @@ class ValidationAgent:
         Returns:
             更新后的state，包含validation_result字段
         """
-        risk_assessment = state.get("risk_assessment", {})
-
         # TODO: AI团队实现以下校验逻辑
         # 1. 校验风险等级是否合理
         # 2. 校验风险因素是否真实存在
         # 3. 校验黑名单数据是否准确
         # 4. 检查是否遗漏重要风险
 
-        validation_result = {
-            "is_valid": True,
-            "errors": [],
-            "warnings": []
-        }
+        validation_result = {"is_valid": True, "errors": [], "warnings": []}
 
         state["validation_result"] = validation_result
         return state
@@ -143,30 +139,26 @@ class ValidationAgent:
         # 4. 校验Gas费是否异常
         # 5. 检查是否有恶意指令
 
-        validation_result = {
-            "is_valid": True,
-            "errors": [],
-            "warnings": []
-        }
+        validation_result = {"is_valid": True, "errors": [], "warnings": []}
 
         # 示例：校验金额
         amount = transaction.get("amount", 0)
         if amount <= 0:
             validation_result["is_valid"] = False
-            validation_result["errors"].append({
-                "field": "amount",
-                "message": "交易金额必须大于0",
-                "action": "reject"
-            })
+            validation_result["errors"].append(
+                {"field": "amount", "message": "交易金额必须大于0", "action": "reject"}
+            )
 
         # 示例：校验Gas费
         gas_fee = transaction.get("gas_fee", 0)
         if gas_fee > 0.1:  # Gas费超过0.1 SOL需要警告
-            validation_result["warnings"].append({
-                "field": "gas_fee",
-                "message": f"Gas费 {gas_fee} SOL 异常高，请确认",
-                "action": "warn_user"
-            })
+            validation_result["warnings"].append(
+                {
+                    "field": "gas_fee",
+                    "message": f"Gas费 {gas_fee} SOL 异常高，请确认",
+                    "action": "warn_user",
+                }
+            )
 
         state["validation_result"] = validation_result
         return state
@@ -184,7 +176,8 @@ class ValidationAgent:
         """
         messages = [
             SystemMessage(content=self.system_prompt),
-            HumanMessage(content=f"""
+            HumanMessage(
+                content=f"""
 请检查以下内容是否存在幻觉（虚构的信息）：
 
 内容: {content}
@@ -198,10 +191,11 @@ class ValidationAgent:
 4. 不合理的承诺
 
 如果发现幻觉，请列出具体内容。
-""")
+"""
+            ),
         ]
 
-        response = await self.llm.ainvoke(messages)
+        await self.llm.ainvoke(messages)
 
         # TODO: AI团队解析LLM响应，提取幻觉列表
         hallucinations = []
@@ -244,13 +238,15 @@ class ValidationAgent:
 
         messages = [
             SystemMessage(content=self.system_prompt),
-            HumanMessage(content=f"""
+            HumanMessage(
+                content=f"""
 以下内容校验失败，请生成重写指令：
 
 错误列表: {errors}
 
 请生成清晰的重写指令，告诉原Agent如何修正。
-""")
+"""
+            ),
         ]
 
         response = await self.llm.ainvoke(messages)

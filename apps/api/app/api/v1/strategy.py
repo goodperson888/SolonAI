@@ -1,7 +1,7 @@
 from fastapi import APIRouter
-from typing import Optional
 
 router = APIRouter()
+
 
 @router.post("/generate")
 async def generate_strategy():
@@ -15,6 +15,7 @@ async def generate_strategy():
     """
     return {"message": "策略生成接口 - 待实现"}
 
+
 @router.get("/{strategy_id}")
 async def get_strategy(strategy_id: str):
     """
@@ -22,10 +23,8 @@ async def get_strategy(strategy_id: str):
 
     TODO: 实现策略查询逻辑
     """
-    return {
-        "strategy_id": strategy_id,
-        "message": "策略查询接口 - 待实现"
-    }
+    return {"strategy_id": strategy_id, "message": "策略查询接口 - 待实现"}
+
 
 @router.post("/{strategy_id}/execute")
 async def execute_strategy(strategy_id: str):
@@ -36,7 +35,4 @@ async def execute_strategy(strategy_id: str):
     - 生成交易指令
     - 返回给前端签名
     """
-    return {
-        "strategy_id": strategy_id,
-        "message": "策略执行接口 - 待实现"
-    }
+    return {"strategy_id": strategy_id, "message": "策略执行接口 - 待实现"}

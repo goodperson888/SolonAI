@@ -418,8 +418,9 @@ MIT License
 ## 联系我们
 
 - GitHub Issues: [提交问题](https://github.com/your-org/solon-ai/issues)
-- 项目负责人: [联系方式]
+- 项目负责人/微信: [xaochen66]
 
 ---
 
 **注意**: 本项目处于早期开发阶段，API可能会有变动。生产环境使用前请充分测试。
+

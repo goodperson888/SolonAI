@@ -1,4 +1,5 @@
-from typing import Dict, Any, List
+from typing import Any, Dict
+
 
 class RiskAgent:
     """
@@ -37,12 +38,7 @@ class RiskAgent:
         # 3. 评估风险等级
         # TODO: 实现风险评级
 
-        return {
-            "is_safe": True,
-            "risk_level": "low",
-            "risks": risks,
-            "warnings": []
-        }
+        return {"is_safe": True, "risk_level": "low", "risks": risks, "warnings": []}
 
     async def check_transaction(self, transaction: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -56,10 +52,7 @@ class RiskAgent:
 
         TODO: 实现交易风险检查逻辑
         """
-        return {
-            "is_safe": True,
-            "warnings": []
-        }
+        return {"is_safe": True, "warnings": []}
 
     async def check_blacklist(self, address: str) -> bool:
         """

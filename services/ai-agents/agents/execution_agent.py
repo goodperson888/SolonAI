@@ -1,4 +1,5 @@
-from typing import Dict, Any
+from typing import Any, Dict
+
 
 class ExecutionAgent:
     """
@@ -14,9 +15,7 @@ class ExecutionAgent:
         self.blockchain_service = blockchain_service
 
     async def prepare_transaction(
-        self,
-        strategy: Dict[str, Any],
-        wallet_address: str
+        self, strategy: Dict[str, Any], wallet_address: str
     ) -> Dict[str, Any]:
         """
         准备交易
@@ -44,17 +43,15 @@ class ExecutionAgent:
                     "action": "deposit",
                     "protocol": "MarginFi",
                     "amount": "100 SOL",
-                    "estimated_gas": "0.00001 SOL"
+                    "estimated_gas": "0.00001 SOL",
                 }
             ],
             "total_gas": "0.00001 SOL",
-            "requires_signature": True
+            "requires_signature": True,
         }
 
     async def execute_transaction(
-        self,
-        transaction: Dict[str, Any],
-        signature: str
+        self, transaction: Dict[str, Any], signature: str
     ) -> Dict[str, Any]:
         """
         执行交易
@@ -77,8 +74,4 @@ class ExecutionAgent:
         # 3. 监控交易状态
         # TODO: 实现状态监控
 
-        return {
-            "status": "success",
-            "tx_hash": "0x123...",
-            "block_number": 12345
-        }
+        return {"status": "success", "tx_hash": "0x123...", "block_number": 12345}

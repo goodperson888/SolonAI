@@ -1,10 +1,13 @@
-from langgraph.graph import StateGraph, END
-from typing import TypedDict, Annotated, Sequence
-from langchain.schema import BaseMessage
 import operator
+from typing import Annotated, Sequence, TypedDict
+
+from langchain.schema import BaseMessage
+from langgraph.graph import END, StateGraph
+
 
 class AgentState(TypedDict):
     """全局状态定义"""
+
     messages: Annotated[Sequence[BaseMessage], operator.add]
     user_input: str
     intent: dict
@@ -12,6 +15,7 @@ class AgentState(TypedDict):
     risk_audit: dict
     transaction: dict
     final_result: dict
+
 
 class MainGraph:
     """
@@ -66,14 +70,13 @@ class MainGraph:
         """执行准备节点"""
         if state["risk_audit"]["is_safe"]:
             transaction = await self.agents["execution"].prepare_transaction(
-                state["strategy"],
-                state.get("wallet_address", "")
+                state["strategy"], state.get("wallet_address", "")
             )
             state["transaction"] = transaction
         state["final_result"] = {
             "strategy": state["strategy"],
             "risk_audit": state["risk_audit"],
-            "transaction": state.get("transaction", {})
+            "transaction": state.get("transaction", {}),
         }
         return state
 
@@ -98,7 +101,7 @@ class MainGraph:
             "strategy": {},
             "risk_audit": {},
             "transaction": {},
-            "final_result": {}
+            "final_result": {},
         }
 
         result = await self.graph.ainvoke(initial_state)

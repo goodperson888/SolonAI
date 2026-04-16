@@ -3,7 +3,8 @@
 职责：把专业的链上数据、策略报告、风险提示、交易明细翻译成大白话，生成可视化的解读内容
 """
 
-from typing import Dict, List, Any
+from typing import Dict
+
 from langchain_core.messages import HumanMessage, SystemMessage
 
 
@@ -46,7 +47,8 @@ class ExplanationAgent:
 
         messages = [
             SystemMessage(content=self.system_prompt),
-            HumanMessage(content=f"""
+            HumanMessage(
+                content=f"""
 请用大白话解读以下钱包数据，让新手用户能看懂：
 
 钱包地址: {wallet_data.get('address', 'N/A')}
@@ -61,7 +63,8 @@ LP头寸数量: {len(wallet_data.get('lp_positions', []))}
 2. 指出值得关注的地方
 3. 给出通俗易懂的建议
 4. 不超过200字
-""")
+"""
+            ),
         ]
 
         response = await self.llm.ainvoke(messages)
@@ -82,7 +85,8 @@ LP头寸数量: {len(wallet_data.get('lp_positions', []))}
 
         messages = [
             SystemMessage(content=self.system_prompt),
-            HumanMessage(content=f"""
+            HumanMessage(
+                content=f"""
 请用大白话解读以下DeFi策略，让新手用户能看懂：
 
 策略名称: {strategy.get('name', 'N/A')}
@@ -97,7 +101,8 @@ LP头寸数量: {len(wallet_data.get('lp_positions', []))}
 3. 解释为什么选择这些协议
 4. 告诉用户需要注意什么
 5. 不超过300字
-""")
+"""
+            ),
         ]
 
         response = await self.llm.ainvoke(messages)
@@ -118,7 +123,8 @@ LP头寸数量: {len(wallet_data.get('lp_positions', []))}
 
         messages = [
             SystemMessage(content=self.system_prompt),
-            HumanMessage(content=f"""
+            HumanMessage(
+                content=f"""
 请用大白话解读以下风险评估，让新手用户能看懂：
 
 风险等级: {risk_assessment.get('risk_level', 'N/A')}
@@ -132,7 +138,8 @@ LP头寸数量: {len(wallet_data.get('lp_positions', []))}
 4. 提供具体的解决方案
 5. 语气严肃但不吓人
 6. 不超过200字
-""")
+"""
+            ),
         ]
 
         response = await self.llm.ainvoke(messages)
@@ -153,7 +160,8 @@ LP头寸数量: {len(wallet_data.get('lp_positions', []))}
 
         messages = [
             SystemMessage(content=self.system_prompt),
-            HumanMessage(content=f"""
+            HumanMessage(
+                content=f"""
 请用大白话解读以下交易，让新手用户能看懂：
 
 交易类型: {transaction.get('type', 'N/A')}
@@ -167,7 +175,8 @@ LP头寸数量: {len(wallet_data.get('lp_positions', []))}
 3. 解释费用是否合理
 4. 提醒需要注意的地方
 5. 不超过150字
-""")
+"""
+            ),
         ]
 
         response = await self.llm.ainvoke(messages)
@@ -195,7 +204,9 @@ LP头寸数量: {len(wallet_data.get('lp_positions', []))}
         messages.extend(conversation_history[-10:])  # 保留最近10轮对话
 
         # 添加当前问题
-        messages.append(HumanMessage(content=f"""
+        messages.append(
+            HumanMessage(
+                content=f"""
 用户问题: {user_question}
 
 请用大白话回答，要求：
@@ -204,7 +215,9 @@ LP头寸数量: {len(wallet_data.get('lp_positions', []))}
 3. 用例子和类比帮助理解
 4. 语气友好、耐心
 5. 不超过200字
-"""))
+"""
+            )
+        )
 
         response = await self.llm.ainvoke(messages)
         state["answer"] = response.content
