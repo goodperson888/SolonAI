@@ -1,8 +1,10 @@
-export default function NotFound() {
+'use client'
+
+export default function GlobalError() {
   return (
     <html lang="zh-CN">
       <head>
-        <title>404 - 页面未找到</title>
+        <title>500 - 服务器错误</title>
       </head>
       <body style={{ margin: 0, padding: 0, fontFamily: 'system-ui, sans-serif' }}>
         <div
@@ -23,7 +25,7 @@ export default function NotFound() {
                 marginBottom: '1rem',
               }}
             >
-              404
+              500
             </h1>
             <h2
               style={{
@@ -33,9 +35,9 @@ export default function NotFound() {
                 marginBottom: '1rem',
               }}
             >
-              页面未找到
+              服务器错误
             </h2>
-            <p style={{ color: '#9ca3af', marginBottom: '2rem' }}>抱歉，您访问的页面不存在</p>
+            <p style={{ color: '#9ca3af', marginBottom: '2rem' }}>抱歉，服务器遇到了问题</p>
             <a
               href="/"
               style={{

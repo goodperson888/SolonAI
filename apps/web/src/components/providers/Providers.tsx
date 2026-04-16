@@ -15,7 +15,7 @@ const WalletProviderDynamic = dynamic(
   { ssr: false }
 )
 
-export function Providers({ children }: { children: React.ReactNode }) {
+export default function Providers({ children }: { children: React.ReactNode }) {
   return (
     <I18nProvider>
       <QueryProvider>
@@ -29,3 +29,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
     </I18nProvider>
   )
 }
+
+// 保留命名导出以兼容其他地方的引用
+export { Providers }
