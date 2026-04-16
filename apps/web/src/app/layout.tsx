@@ -1,12 +1,7 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
-import { WalletProvider } from '@/components/wallet/WalletProvider'
-import { QueryProvider } from '@/components/providers/QueryProvider'
-import { I18nProvider } from '@/hooks/useTranslation'
-import { Header } from '@/components/layout/Header'
-import { Footer } from '@/components/layout/Footer'
-import { FloatingAIButton } from '@/components/chat/FloatingAIButton'
+import { Providers } from '@/components/providers/Providers'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -19,16 +14,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="zh-CN">
       <body className={inter.className}>
-        <I18nProvider>
-          <QueryProvider>
-            <WalletProvider>
-              <Header />
-              <main className="min-h-screen">{children}</main>
-              <Footer />
-              <FloatingAIButton />
-            </WalletProvider>
-          </QueryProvider>
-        </I18nProvider>
+        <Providers>{children}</Providers>
       </body>
     </html>
   )
