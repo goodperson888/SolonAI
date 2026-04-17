@@ -1,77 +1,102 @@
+"""
+ExecutionAgent - 执行协调
+
+职责：将策略转换为可执行的链上交易指令。
+生成交易预览，等待用户确认后协调执行。
+
+注意：Solon AI 是非托管的，不碰用户私钥。
+所有交易都是生成指令 → 用户钱包签名 → 广播上链。
+"""
+
+import json
 from typing import Any, Dict
 
+from base_agent import BaseAgent
 
-class ExecutionAgent:
-    """
-    执行协调Agent
 
-    职责：
-    - 将策略转换为可执行的交易指令
-    - 协调非托管执行流程
-    - 生成交易预览
-    """
+class ExecutionAgent(BaseAgent):
+    name = "execution_agent"
+    description = "将策略转换为链上交易指令"
 
-    def __init__(self, blockchain_service):
-        self.blockchain_service = blockchain_service
+    @property
+    def system_prompt(self) -> str:
+        return """你是 Solana 交易构建专家。负责将投资策略转换为具体的链上交易指令。
 
-    async def prepare_transaction(
-        self, strategy: Dict[str, Any], wallet_address: str
-    ) -> Dict[str, Any]:
-        """
-        准备交易
+## 核心原则
+- 非托管：绝不碰用户私钥
+- 所有交易都需要用户在钱包中签名确认
+- 必须展示交易预览，让用户知道将会发生什么
 
-        Args:
-            strategy: 策略详情
-            wallet_address: 用户钱包地址
+## 返回 JSON 格式
 
-        Returns:
-            交易预览
+```json
+{
+  "transaction_id": "tx_001",
+  "type": "deposit/swap/withdraw",
+  "steps": [
+    {
+      "step": 1,
+      "action": "approve",
+      "protocol": "MarginFi",
+      "description": "授权 MarginFi 使用你的 USDC",
+      "estimated_gas": 0.000005
+    },
+    {
+      "step": 2,
+      "action": "deposit",
+      "protocol": "MarginFi",
+      "token": "USDC",
+      "amount": 5000,
+      "description": "存入 5000 USDC 到 MarginFi",
+      "estimated_gas": 0.000005
+    }
+  ],
+  "total_gas": 0.00001,
+  "requires_signature": true,
+  "warnings": ["请确认金额无误后再签名"]
+}
+```"""
 
-        TODO: 实现交易准备逻辑
-        """
-        # 1. 解析策略步骤
-        # TODO: 实现策略解析
+    async def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        """构建交易指令"""
+        strategy = state.get("strategy", {})
+        wallet_address = state.get("wallet_address", "")
 
-        # 2. 构建交易指令
-        # TODO: 实现交易构建
+        prompt_input = f"""
+请为以下策略构建交易指令：
 
-        # 3. 生成预览
-        return {
-            "transaction_id": "tx_001",
-            "steps": [
-                {
-                    "action": "deposit",
-                    "protocol": "MarginFi",
-                    "amount": "100 SOL",
-                    "estimated_gas": "0.00001 SOL",
-                }
-            ],
-            "total_gas": "0.00001 SOL",
-            "requires_signature": True,
-        }
+策略：
+{json.dumps(strategy, ensure_ascii=False, indent=2)}
 
-    async def execute_transaction(
-        self, transaction: Dict[str, Any], signature: str
-    ) -> Dict[str, Any]:
-        """
-        执行交易
+用户钱包地址：{wallet_address or '待用户连接钱包'}
 
-        Args:
-            transaction: 交易详情
-            signature: 用户签名
+请生成详细的交易步骤，包括每步的 Gas 费预估。"""
 
-        Returns:
-            执行结果
+        result = await self.call_llm_json(prompt_input)
 
-        TODO: 实现交易执行逻辑
-        """
-        # 1. 验证签名
-        # TODO: 实现签名验证
+        if result.get("parse_error"):
+            # 降级：根据策略构建简单的交易指令
+            steps = strategy.get("steps", [])
+            result = {
+                "transaction_id": "tx_001",
+                "type": "deposit",
+                "steps": [
+                    {
+                        "step": i + 1,
+                        "action": s.get("action", "deposit"),
+                        "protocol": s.get("protocol", "unknown"),
+                        "token": s.get("token", "SOL"),
+                        "amount": s.get("amount", 0),
+                        "description": s.get("description", ""),
+                        "estimated_gas": 0.000005,
+                    }
+                    for i, s in enumerate(steps)
+                ],
+                "total_gas": 0.000005 * len(steps),
+                "requires_signature": True,
+                "warnings": ["请确认金额无误后再签名"],
+            }
 
-        # 2. 提交交易到区块链
-        # TODO: 实现交易提交
-
-        # 3. 监控交易状态
-        # TODO: 实现状态监控
-
-        return {"status": "success", "tx_hash": "0x123...", "block_number": 12345}
+        state["transaction"] = result
+        state["current_agent"] = self.name
+        return state

@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useWallet } from '@solana/wallet-adapter-react'
 import { StatCard } from '@/components/dashboard/StatCard'
 import { AssetCard } from '@/components/assets/AssetCard'
 import { StrategyCard } from '@/components/strategy/StrategyCard'
@@ -9,12 +10,69 @@ import { Button } from '@/components/ui/Button'
 import { useTranslation } from '@/hooks/useTranslation'
 import { mockAssets, mockPortfolioStats } from '@/data/mockAssets'
 import { mockStrategies } from '@/data/mockStrategies'
+import { assetsApi, WalletAssetsResponse } from '@/lib/api-client'
 
 type TabType = 'overview' | 'profit' | 'risk'
 
 export default function DashboardPage() {
   const { t } = useTranslation()
+  const { publicKey, connected } = useWallet()
   const [activeTab, setActiveTab] = useState<TabType>('overview')
+  const [walletAssets, setWalletAssets] = useState<WalletAssetsResponse | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // 获取钱包资产
+  const fetchWalletAssets = async () => {
+    if (!publicKey) return
+
+    setIsLoading(true)
+    setError(null)
+    try {
+      const data = await assetsApi.getWalletAssets(publicKey.toBase58())
+      setWalletAssets(data)
+    } catch (err) {
+      console.error('Failed to fetch wallet assets:', err)
+      setError('获取资产数据失败')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (connected && publicKey) {
+      fetchWalletAssets()
+    } else {
+      setWalletAssets(null)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connected, publicKey])
+
+  // 转换为 AssetCard 格式
+  const displayAssets = walletAssets
+    ? [
+        {
+          id: 'sol',
+          icon: 'S',
+          symbol: 'SOL',
+          name: 'Solana',
+          amount: walletAssets.sol_balance,
+          value: walletAssets.sol_value_usd,
+          change24h: 0, // TODO: 需要历史价格数据
+        },
+        ...walletAssets.tokens.map((token) => ({
+          id: token.mint,
+          icon: token.symbol.charAt(0),
+          symbol: token.symbol,
+          name: token.name,
+          amount: token.balance,
+          value: token.usd_value,
+          change24h: 0, // TODO: 需要历史价格数据
+        })),
+      ]
+    : mockAssets
+
+  const totalValue = walletAssets?.total_value_usd || mockPortfolioStats.totalValue
 
   const tabs = [
     { id: 'overview' as TabType, name: '资产总览' },
@@ -28,14 +86,59 @@ export default function DashboardPage() {
         {/* Page Title */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-white">{t('dashboard.title')}</h1>
-          <p className="mt-2 text-gray-400">欢迎回来！这是你的资产概览</p>
+          <p className="mt-2 text-gray-400">
+            {connected
+              ? `钱包已连接: ${publicKey?.toBase58().slice(0, 8)}...`
+              : '欢迎回来！这是你的资产概览'}
+          </p>
         </div>
+
+        {/* 钱包未连接提示 */}
+        {!connected && (
+          <Card className="mb-8 p-6">
+            <div className="flex items-center gap-4">
+              <span className="text-4xl">👛</span>
+              <div className="flex-1">
+                <h3 className="mb-2 text-lg font-semibold text-white">连接钱包查看真实资产</h3>
+                <p className="text-sm text-gray-400">
+                  点击右上角连接钱包按钮，即可查看您的链上资产数据
+                </p>
+              </div>
+            </div>
+          </Card>
+        )}
+
+        {/* 加载状态 */}
+        {isLoading && (
+          <Card className="mb-8 p-6">
+            <div className="flex items-center gap-4">
+              <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-500 border-t-transparent"></div>
+              <p className="text-gray-400">正在加载链上资产数据...</p>
+            </div>
+          </Card>
+        )}
+
+        {/* 错误提示 */}
+        {error && (
+          <Card className="mb-8 border border-red-500/30 bg-red-500/10 p-6">
+            <div className="flex items-center gap-4">
+              <span className="text-2xl">⚠️</span>
+              <div className="flex-1">
+                <h3 className="mb-1 font-semibold text-white">加载失败</h3>
+                <p className="text-sm text-gray-300">{error}</p>
+              </div>
+              <Button variant="outline" size="sm" onClick={fetchWalletAssets}>
+                重试
+              </Button>
+            </div>
+          </Card>
+        )}
 
         {/* Stats Cards */}
         <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
           <StatCard
             title={t('dashboard.totalValue')}
-            value={`$${mockPortfolioStats.totalValue.toLocaleString()}`}
+            value={`$${totalValue.toLocaleString()}`}
             change={mockPortfolioStats.change24h}
             trend={mockPortfolioStats.change24h >= 0 ? 'up' : 'down'}
             icon="💰"
@@ -88,10 +191,23 @@ export default function DashboardPage() {
                 </button>
               </div>
               <div className="space-y-4">
-                {mockAssets.map((asset) => (
+                {displayAssets.map((asset) => (
                   <AssetCard key={asset.id} {...asset} />
                 ))}
               </div>
+
+              {connected &&
+                walletAssets &&
+                walletAssets.tokens.length === 0 &&
+                walletAssets.sol_balance === 0 && (
+                  <Card className="p-6">
+                    <div className="text-center">
+                      <span className="text-4xl">🪙</span>
+                      <h3 className="mt-4 text-lg font-semibold text-white">钱包暂无资产</h3>
+                      <p className="mt-2 text-sm text-gray-400">您的钱包中还没有任何资产</p>
+                    </div>
+                  </Card>
+                )}
             </div>
 
             {/* Active Strategies Section */}

@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Button } from '@/components/ui/Button'
+import { WalletMultiButton } from '@solana/wallet-adapter-react-ui'
 import { useTranslation } from '@/hooks/useTranslation'
 
 export const Header = () => {
@@ -58,10 +58,8 @@ export const Header = () => {
               {locale === 'zh' ? 'EN' : '中文'}
             </button>
 
-            {/* Wallet Button - TODO: 实现钱包连接 */}
-            <Button variant="primary" size="md">
-              {t('wallet.connect')}
-            </Button>
+            {/* Wallet Button */}
+            <WalletMultiButton />
           </div>
         </div>
       </div>
