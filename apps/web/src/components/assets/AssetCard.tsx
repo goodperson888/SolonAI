@@ -7,8 +7,8 @@ interface AssetCardProps {
   symbol: string
   name: string
   amount: number
-  value: number
-  change24h: number
+  value?: number
+  change24h?: number
 }
 
 export const AssetCard: React.FC<AssetCardProps> = ({
@@ -16,8 +16,8 @@ export const AssetCard: React.FC<AssetCardProps> = ({
   symbol,
   name,
   amount,
-  value,
-  change24h,
+  value = 0,
+  change24h = 0,
 }) => {
   const isPositive = change24h >= 0
 

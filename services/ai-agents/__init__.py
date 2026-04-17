@@ -1,27 +1,20 @@
 """
-AI Agents Service
+Solon AI - AI 智能体服务
 
-多智能体协同服务，8个专业Agent协同工作
+8个 Agent 通过 LangGraph 协同工作：
+
+1. IntentAgent      - 意图理解（入口）
+2. DataAggregation  - 数据聚合
+3. StrategyAgent    - 策略生成
+4. RiskAgent        - 风控审计
+5. ValidationAgent  - 结果验证
+6. ExecutionAgent   - 执行协调
+7. MonitoringAgent  - 持续监控
+8. ExplanationAgent - 大白话解释（出口）
+
+使用方法：
+    from graphs.main_graph import run_agent
+
+    result = await run_agent("帮我看看钱包里有什么资产")
+    print(result["explanation"])
 """
-
-from agents.data_aggregation_agent import DataAggregationAgent
-from agents.execution_agent import ExecutionAgent
-from agents.explanation_agent import ExplanationAgent
-from agents.intent_agent import IntentAgent
-from agents.monitoring_agent import MonitoringAgent
-from agents.risk_agent import RiskAgent
-from agents.strategy_agent import StrategyAgent
-from agents.validation_agent import ValidationAgent
-from graphs.main_graph import MainGraph
-
-__all__ = [
-    "IntentAgent",
-    "DataAggregationAgent",
-    "StrategyAgent",
-    "RiskAgent",
-    "ExecutionAgent",
-    "MonitoringAgent",
-    "ExplanationAgent",
-    "ValidationAgent",
-    "MainGraph",
-]

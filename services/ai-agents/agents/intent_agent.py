@@ -1,62 +1,91 @@
+"""
+IntentAgent - 意图理解
+
+职责：理解用户自然语言输入，识别意图并提取参数。
+这是整个流程的入口 Agent。
+
+支持的意图：
+- query_assets: 查询资产（"帮我看看钱包里有什么"）
+- generate_strategy: 生成策略（"给我推荐一个稳健的DeFi策略"）
+- execute_trade: 执行交易（"帮我在Jupiter上把100 SOL换成USDC"）
+- risk_check: 风控检查（"这个代币安全吗"）
+- chat: 普通聊天（"Solana是什么"）
+"""
+
+import json
 from typing import Any, Dict
 
-from langchain.prompts import ChatPromptTemplate
+from base_agent import BaseAgent
 
 
-class IntentAgent:
-    """
-    意图理解Agent
+class IntentAgent(BaseAgent):
+    name = "intent_agent"
+    description = "理解用户意图，提取关键参数"
 
-    职责：
-    - 解析用户自然语言输入
-    - 识别用户核心需求
-    - 提取关键参数
-    """
+    @property
+    def system_prompt(self) -> str:
+        return """你是 Solon AI 的意图理解模块，负责分析用户输入的自然语言。
 
-    def __init__(self, llm):
-        self.llm = llm
-        self.prompt = self._load_prompt()
+你必须识别用户的意图，并提取关键参数。
 
-    def _load_prompt(self) -> ChatPromptTemplate:
-        """加载Prompt模板"""
-        return ChatPromptTemplate.from_messages(
-            [
-                (
-                    "system",
-                    """你是Solana DeFi专家，负责理解用户的投资需求。
+## 支持的意图类型
 
-你需要从用户输入中提取：
-1. 用户意图（查询资产、生成策略、执行交易等）
-2. 风险偏好（保守、稳健、进取）
-3. 资金规模
-4. 其他约束条件
+1. `query_assets` - 查询资产
+   - 用户想查看钱包余额、资产列表、持仓情况
+   - 示例："帮我看看钱包里有什么"、"我有多少SOL"
 
-请以JSON格式返回结果。""",
-                ),
-                ("user", "{input}"),
-            ]
-        )
+2. `generate_strategy` - 生成投资策略
+   - 用户想获取DeFi投资建议
+   - 示例："给我推荐一个稳健策略"、"怎么用100 SOL赚利息"
+   - 提取参数：risk_level(conservative/moderate/aggressive)、amount、token
 
-    async def understand_intent(self, user_input: str) -> Dict[str, Any]:
-        """
-        理解用户意图
+3. `execute_trade` - 执行交易
+   - 用户想进行代币交换、存款、借贷等操作
+   - 示例："把50 SOL换成USDC"、"在MarginFi存入100 USDC"
+   - 提取参数：action(swap/deposit/withdraw/borrow)、token_in、token_out、amount
 
-        Args:
-            user_input: 用户输入的自然语言
+4. `risk_check` - 风控检查
+   - 用户想检查某个代币或协议的安全性
+   - 示例："这个代币安全吗"、"帮我检查一下授权"
+   - 提取参数：target(代币地址或协议名)
 
-        Returns:
-            解析后的意图和参数
+5. `chat` - 普通对话
+   - 用户在闲聊或问DeFi知识
+   - 示例："什么是无常损失"、"Solana和以太坊有什么区别"
 
-        TODO: 实现完整的意图理解逻辑
-        """
-        # 调用LLM
-        messages = self.prompt.format_messages(input=user_input)
-        await self.llm.ainvoke(messages)
+## 返回格式
 
-        # 解析响应
-        # TODO: 添加结果验证和错误处理
+必须返回 JSON：
+```json
+{
+  "intent": "意图类型",
+  "confidence": 0.95,
+  "params": {
+    "risk_level": "conservative",
+    "amount": 100,
+    "token": "SOL"
+  },
+  "reasoning": "简短解释为什么判断为这个意��"
+}
+```"""
 
-        return {
-            "intent": "generate_strategy",
-            "parameters": {"risk_level": "conservative", "amount": 100},
-        }
+    async def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        """理解用户意图"""
+        user_input = state.get("user_input", "")
+
+        if not user_input:
+            state["error"] = "用户输入为空"
+            return state
+
+        result = await self.call_llm_json(user_input)
+
+        if result.get("parse_error"):
+            # JSON 解析失败，默认当作普通聊天
+            state["intent"] = "chat"
+            state["intent_params"] = {}
+        else:
+            state["intent"] = result.get("intent", "chat")
+            state["intent_params"] = result.get("params", {})
+
+        state["current_agent"] = self.name
+        return state

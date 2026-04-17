@@ -1,81 +1,111 @@
+"""
+StrategyAgent - 策略生成
+
+职责：基于用户需求和链上数据，生成 DeFi 投资策略。
+包含收益测算、风险评级、操作步骤拆解。
+"""
+
+import json
 from typing import Any, Dict
 
-from langchain.prompts import ChatPromptTemplate
+from base_agent import BaseAgent
 
 
-class StrategyAgent:
-    """
-    策略生成Agent
+class StrategyAgent(BaseAgent):
+    name = "strategy_agent"
+    description = "基于用户需求生成DeFi策略"
 
-    职责：
-    - 基于用户需求生成DeFi策略
-    - 收益测算
-    - 风险评级
-    - 操作步骤拆解
-    """
+    @property
+    def system_prompt(self) -> str:
+        return """你是 Solana DeFi 策略专家。根据用户的风险偏好、资金规模和链上数据，生成安全可落地的投资策略。
 
-    def __init__(self, llm, tools):
-        self.llm = llm
-        self.tools = tools
-        self.prompt = self._load_prompt()
+## 可用协议
 
-    def _load_prompt(self) -> ChatPromptTemplate:
-        """加载Prompt模板"""
-        return ChatPromptTemplate.from_messages(
-            [
-                (
-                    "system",
-                    """你是Solana DeFi策略专家，负责生成安全、可落地的投资策略。
+- MarginFi（借贷）：存款年化 3-8%，风险极低，已审计
+- Raydium（DEX/流动性挖矿）：年化 8-25%，风险中低
+- Jupiter（聚合交易）：最优价格的代币交换
+- Orca（DEX）：年化 5-22%，风险低
+- Kamino（质押）：年化 5-12%，风险低
 
-你需要：
-1. 根据用户的风险偏好和资金规模，推荐合适的DeFi协议
-2. 计算预期收益和最大风险
-3. 拆解详细的操作步骤
-4. 标注涉及协议的审计情况
+## 风险等级映射
 
-可用的协议：
-- MarginFi（借贷）：年化3-8%，风险极低
-- Raydium（流动性挖矿）：年化8-20%，风险中低
-- Kamino（质押）：年化5-12%，风险低
+- conservative（保守）：只推荐借贷和质押，年化 3-8%
+- moderate（稳健）：可以包含流动性挖矿，年化 8-15%
+- aggressive（进取）：可以包含高收益池，年化 15%+
 
-请以JSON格式返回策略。""",
-                ),
-                ("user", "{input}"),
-            ]
-        )
+## 返回 JSON 格式
 
-    async def generate_strategy(self, user_input: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        生成投资策略
+```json
+{
+  "strategy_name": "策略名称",
+  "risk_level": "conservative/moderate/aggressive",
+  "expected_apy": 8.2,
+  "protocols": ["MarginFi", "Raydium"],
+  "steps": [
+    {
+      "step": 1,
+      "action": "deposit",
+      "protocol": "MarginFi",
+      "token": "USDC",
+      "amount": 5000,
+      "expected_apy": 8.2,
+      "description": "将5000 USDC存入MarginFi赚取利息"
+    }
+  ],
+  "risk_warnings": ["无常损失风险", "协议合约风险"],
+  "total_investment": 5000,
+  "estimated_daily_income": 1.12,
+  "estimated_monthly_income": 33.7
+}
+```"""
 
-        Args:
-            user_input: 用户输入（风险偏好、资金规模等）
+    async def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        """生成投资策略"""
+        intent_params = state.get("intent_params", {})
+        wallet_assets = state.get("wallet_assets", [])
+        protocol_data = state.get("protocol_data", {})
 
-        Returns:
-            策略详情
+        # 构建给 LLM 的输入
+        prompt_input = f"""
+用户需求：
+- 风险偏好：{intent_params.get('risk_level', 'conservative')}
+- 投资金额：{intent_params.get('amount', '未指定')}
+- 指定代币：{intent_params.get('token', '未指定')}
 
-        TODO: 实现完整的策略生成逻辑
-        """
-        # 1. 参数校验
-        self._validate_input(user_input)
+用户当前持仓：
+{json.dumps(wallet_assets, ensure_ascii=False, indent=2)}
 
-        # 2. 调用LLM生成策略
-        # TODO: 实现LLM调用逻辑
+可用协议数据：
+{json.dumps(protocol_data, ensure_ascii=False, indent=2)}
 
-        # 3. 结果校验
-        # TODO: 实现结果校验逻辑
+请生成一个可执行的 DeFi 投资策略。"""
 
-        return {
-            "strategy_id": "strategy_001",
-            "name": "MarginFi稳健生息策略",
-            "risk_level": "conservative",
-            "expected_apy": "4.2%",
-            "steps": ["将SOL存入MarginFi", "开始赚取利息"],
-        }
+        result = await self.call_llm_json(prompt_input)
 
-    def _validate_input(self, user_input: Dict[str, Any]):
-        """输入校验"""
-        required_fields = ["risk_level", "amount"]
-        for field in required_fields:
-            if field not in user_input:
-                raise ValueError(f"Missing required field: {field}")
+        if result.get("parse_error"):
+            # 降级：返回一个默认的保守策略
+            result = {
+                "strategy_name": "MarginFi 稳健生息",
+                "risk_level": "conservative",
+                "expected_apy": 8.2,
+                "protocols": ["MarginFi"],
+                "steps": [
+                    {
+                        "step": 1,
+                        "action": "deposit",
+                        "protocol": "MarginFi",
+                        "token": "USDC",
+                        "amount": 5000,
+                        "expected_apy": 8.2,
+                        "description": "将 USDC 存入 MarginFi 赚取利息",
+                    }
+                ],
+                "risk_warnings": ["协议合约风险"],
+                "total_investment": 5000,
+                "estimated_daily_income": 1.12,
+                "estimated_monthly_income": 33.7,
+            }
+
+        state["strategy"] = result
+        state["current_agent"] = self.name
+        return state

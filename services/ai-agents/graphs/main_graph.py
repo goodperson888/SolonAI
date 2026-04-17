@@ -1,108 +1,235 @@
-import operator
-from typing import Annotated, Sequence, TypedDict
+"""
+Solon AI - LangGraph 主工作流
 
-from langchain.schema import BaseMessage
-from langgraph.graph import END, StateGraph
+将8个 Agent 串联成完整的工作流：
+
+    用户输入
+       ↓
+    IntentAgent（理解意图）
+       ↓
+    DataAggregationAgent（获取数据）
+       ↓
+    ┌─────────────── 根据意图路由 ───────────────┐
+    │                                             │
+    │  query_assets → ExplanationAgent            │
+    │                                             │
+    │  generate_strategy → StrategyAgent          │
+    │                      → RiskAgent            │
+    │                      → ValidationAgent      │
+    │                      → ExecutionAgent        │
+    │                      → MonitoringAgent       │
+    │                      → ExplanationAgent      │
+    │                                             │
+    │  execute_trade → ExecutionAgent              │
+    │                → ExplanationAgent            │
+    │                                             │
+    │  risk_check → RiskAgent                     │
+    │             ��� ExplanationAgent               │
+    │                                             │
+    │  chat → ExplanationAgent                    │
+    └─────────────────────────────────────────────┘
+       ↓
+    返回给用户
+"""
+
+import sys
+import os
+from typing import Any, Dict
+
+from langgraph.graph import StateGraph, END
+
+# 添加项目根目录到路径
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from llm_factory import create_llm
+from agents.intent_agent import IntentAgent
+from agents.data_aggregation_agent import DataAggregationAgent
+from agents.strategy_agent import StrategyAgent
+from agents.risk_agent import RiskAgent
+from agents.validation_agent import ValidationAgent
+from agents.execution_agent import ExecutionAgent
+from agents.monitoring_agent import MonitoringAgent
+from agents.explanation_agent import ExplanationAgent
 
 
-class AgentState(TypedDict):
-    """全局状态定义"""
-
-    messages: Annotated[Sequence[BaseMessage], operator.add]
-    user_input: str
-    intent: dict
-    strategy: dict
-    risk_audit: dict
-    transaction: dict
-    final_result: dict
-
-
-class MainGraph:
+def create_workflow():
     """
-    主流程图
+    创建完整的 Agent 工作流
 
-    协调各个Agent的执行流程：
-    用户输入 → 意图理解 → 策略生成 → 风控审计 → 执行准备 → 返回结果
+    Returns:
+        编译后的 LangGraph 工作流
     """
+    # 创建 LLM 实例
+    llm = create_llm()
 
-    def __init__(self, agents):
-        self.agents = agents
-        self.graph = self._build_graph()
+    # 初始化8个 Agent
+    intent_agent = IntentAgent(llm)
+    data_agent = DataAggregationAgent(llm)
+    strategy_agent = StrategyAgent(llm)
+    risk_agent = RiskAgent(llm)
+    validation_agent = ValidationAgent(llm)
+    execution_agent = ExecutionAgent(llm)
+    monitoring_agent = MonitoringAgent(llm)
+    explanation_agent = ExplanationAgent(llm)
 
-    def _build_graph(self) -> StateGraph:
-        """构建LangGraph流程图"""
-        workflow = StateGraph(AgentState)
+    # 创建状态图
+    workflow = StateGraph(dict)
 
-        # 添加节点
-        workflow.add_node("intent", self._intent_node)
-        workflow.add_node("strategy", self._strategy_node)
-        workflow.add_node("risk", self._risk_node)
-        workflow.add_node("execution", self._execution_node)
+    # 添加节点（每个 Agent 就是一个节点）
+    workflow.add_node("intent", intent_agent)
+    workflow.add_node("data_aggregation", data_agent)
+    workflow.add_node("strategy", strategy_agent)
+    workflow.add_node("risk", risk_agent)
+    workflow.add_node("validation", validation_agent)
+    workflow.add_node("execution", execution_agent)
+    workflow.add_node("monitoring", monitoring_agent)
+    workflow.add_node("explanation", explanation_agent)
 
-        # 定义流程
-        workflow.set_entry_point("intent")
-        workflow.add_edge("intent", "strategy")
-        workflow.add_edge("strategy", "risk")
-        workflow.add_edge("risk", "execution")
-        workflow.add_edge("execution", END)
+    # 设置入口
+    workflow.set_entry_point("intent")
 
-        return workflow.compile()
+    # Intent → DataAggregation（所有意图都先获取数据）
+    workflow.add_edge("intent", "data_aggregation")
 
-    async def _intent_node(self, state: AgentState) -> AgentState:
-        """意图理解节点"""
-        intent = await self.agents["intent"].understand_intent(state["user_input"])
-        state["intent"] = intent
-        return state
+    # DataAggregation → 根据意图路由
+    workflow.add_conditional_edges(
+        "data_aggregation",
+        route_by_intent,
+        {
+            "query_assets": "explanation",
+            "generate_strategy": "strategy",
+            "execute_trade": "execution",
+            "risk_check": "risk",
+            "chat": "explanation",
+        },
+    )
 
-    async def _strategy_node(self, state: AgentState) -> AgentState:
-        """策略生成节点"""
-        strategy = await self.agents["strategy"].generate_strategy(state["intent"]["parameters"])
-        state["strategy"] = strategy
-        return state
+    # 策略生成完整流程
+    workflow.add_edge("strategy", "risk")
 
-    async def _risk_node(self, state: AgentState) -> AgentState:
-        """风控审计节点"""
-        risk_audit = await self.agents["risk"].audit_strategy(state["strategy"])
-        state["risk_audit"] = risk_audit
-        return state
+    # Risk → 根据来源路由（策略生成走validation，风控检查直接走explanation）
+    workflow.add_conditional_edges(
+        "risk",
+        route_after_risk,
+        {
+            "validation": "validation",
+            "explanation": "explanation",
+        },
+    )
 
-    async def _execution_node(self, state: AgentState) -> AgentState:
-        """执行准备节点"""
-        if state["risk_audit"]["is_safe"]:
-            transaction = await self.agents["execution"].prepare_transaction(
-                state["strategy"], state.get("wallet_address", "")
-            )
-            state["transaction"] = transaction
-        state["final_result"] = {
-            "strategy": state["strategy"],
-            "risk_audit": state["risk_audit"],
-            "transaction": state.get("transaction", {}),
-        }
-        return state
+    # Validation → 根据是否通过路由
+    workflow.add_conditional_edges(
+        "validation",
+        route_after_validation,
+        {
+            "execution": "execution",
+            "explanation": "explanation",
+        },
+    )
 
-    async def run(self, user_input: str, wallet_address: str = "") -> dict:
-        """
-        运行完整流程
+    workflow.add_edge("execution", "monitoring")
+    workflow.add_edge("monitoring", "explanation")
 
-        Args:
-            user_input: 用户输入
-            wallet_address: 钱包地址
+    # Explanation → 结束
+    workflow.add_edge("explanation", END)
 
-        Returns:
-            最终结果
+    # 编译工作流
+    return workflow.compile()
 
-        TODO: 添加错误处理和重试机制
-        """
-        initial_state = {
-            "messages": [],
-            "user_input": user_input,
-            "wallet_address": wallet_address,
-            "intent": {},
-            "strategy": {},
-            "risk_audit": {},
-            "transaction": {},
-            "final_result": {},
-        }
 
-        result = await self.graph.ainvoke(initial_state)
-        return result["final_result"]
+def route_by_intent(state: Dict[str, Any]) -> str:
+    """根据意图路由到不同的 Agent"""
+    intent = state.get("intent", "chat")
+
+    if intent == "query_assets":
+        return "query_assets"
+    elif intent == "generate_strategy":
+        return "generate_strategy"
+    elif intent == "execute_trade":
+        return "execute_trade"
+    elif intent == "risk_check":
+        return "risk_check"
+    else:
+        return "chat"
+
+
+def route_after_risk(state: Dict[str, Any]) -> str:
+    """Risk之后的路由：策略生成走validation，风控检查直接走explanation"""
+    intent = state.get("intent", "")
+    if intent == "generate_strategy":
+        return "validation"
+    else:
+        return "explanation"
+
+
+def route_after_validation(state: Dict[str, Any]) -> str:
+    """验证通过后路由"""
+    validation = state.get("validation_result")
+
+    if validation is None or validation.get("is_valid", True):
+        return "execution"
+    else:
+        # 验证不通过，直接跳到解释（告诉用户为什么不通过）
+        return "explanation"
+
+
+# ===== 对外暴露的接口 =====
+
+_workflow = None
+
+
+def get_workflow():
+    """获取工作流单例"""
+    global _workflow
+    if _workflow is None:
+        _workflow = create_workflow()
+    return _workflow
+
+
+async def run_agent(
+    user_input: str,
+    wallet_address: str = "",
+    session_id: str = "",
+) -> Dict[str, Any]:
+    """
+    运行 Agent 工作流（对外主接口）
+
+    Args:
+        user_input: 用户输入的自然语言
+        wallet_address: 用户钱包地址
+        session_id: 会话ID
+
+    Returns:
+        完整的处理结果
+
+    使用示例:
+        result = await run_agent("帮我看看钱包里有什么资产")
+        print(result["explanation"])
+    """
+    workflow = get_workflow()
+
+    # 初始状态
+    initial_state = {
+        "user_input": user_input,
+        "wallet_address": wallet_address,
+        "session_id": session_id,
+        "intent": "",
+        "intent_params": {},
+        "wallet_assets": [],
+        "total_value_usd": 0.0,
+        "protocol_data": {},
+        "strategy": None,
+        "risk_assessment": None,
+        "validation_result": None,
+        "transaction": None,
+        "monitoring_config": None,
+        "explanation": "",
+        "current_agent": "",
+        "error": None,
+        "completed": False,
+    }
+
+    # 运行工作流
+    result = await workflow.ainvoke(initial_state)
+
+    return result

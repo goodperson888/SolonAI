@@ -3,8 +3,6 @@ Blockchain Service
 区块链交互服务，提供Solana链上操作和DeFi协议集成
 """
 
-from .defi import JupiterClient, MarginFiClient
-from .solana import SolanaRPCClient
-from .utils import TransactionBuilder
+from .solana_client import SolanaClient, COMMON_TOKENS
 
-__all__ = ["SolanaRPCClient", "JupiterClient", "MarginFiClient", "TransactionBuilder"]
+__all__ = ["SolanaClient", "COMMON_TOKENS"]
