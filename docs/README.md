@@ -57,6 +57,37 @@
 
 ---
 
+#### [docs/TEAM_ASSIGNMENT_V2.md](./docs/TEAM_ASSIGNMENT_V2.md)
+**用途**: 团队任务分工方案
+**适合**: 所有团队成员（必读）
+**内容**:
+- 团队组织架构（AI组、区块链组、业务组）
+- 每个人的具体任务和负责模块
+- 四层架构图和接口调用关系
+- 两周开发计划和里程碑
+- 工作量评估和优先级
+
+**重要性**: ⭐⭐⭐⭐⭐
+每个人必须知道自己做什么！
+
+#### [docs/GIT_WORKFLOW.md](./docs/GIT_WORKFLOW.md)
+**用途**: Git 工作流和协作规范
+**适合**: 所有团队成员（必读）
+**内容**:
+- 分支结构和命名规范
+- 日常开发流程（新功能、修Bug、Hotfix）
+- Commit 提交规范和自动校验
+- Pull Request 规范和审核规则
+- 代码冲突处理
+- 版本发布流程
+- 常用命令速查
+- 常见问题解答
+
+**重要性**: ⭐⭐⭐⭐⭐
+团队协作的核心规范！
+
+---
+
 ### 开发文档 (docs/)
 
 #### [docs/GETTING_STARTED.md](./docs/GETTING_STARTED.md)
@@ -200,11 +231,13 @@
 
 ### 路径1: 快速上手（30分钟）
 ```
-README.md (10分钟)
+README.md (5分钟)
   ↓
-docs/GETTING_STARTED.md (15分钟)
+docs/TEAM_ASSIGNMENT_V2.md (找到你的任务, 5分钟)
   ↓
-docs/ROLE_GUIDE.md (你的角色部分, 5分钟)
+docs/GIT_WORKFLOW.md (10分钟)
+  ↓
+docs/GETTING_STARTED.md (10分钟)
   ↓
 开始编码！
 ```
@@ -215,24 +248,28 @@ README.md (10分钟)
   ↓
 需求.md (30分钟)
   ↓
-docs/ARCHITECTURE.md (40分钟)
+docs/TEAM_ASSIGNMENT_V2.md (20分钟)
   ↓
-docs/ROLE_GUIDE.md (30分钟)
+docs/ARCHITECTURE.md (30分钟)
   ↓
-团队协作与项目管理规范.md (10分钟)
+docs/GIT_WORKFLOW.md (15分钟)
+  ↓
+docs/CODE_STANDARDS.md (15分钟)
   ↓
 开始编码！
 ```
 
 ### 路径3: 项目负责人（1小时）
 ```
-PROJECT_SETUP_SUMMARY.md (15分钟)
+PROJECT_SETUP_SUMMARY.md (10分钟)
   ↓
-团队协作与项目管理规范.md (20分钟)
+docs/TEAM_ASSIGNMENT_V2.md (15分钟)
   ↓
-docs/CHECKLIST.md (15分钟)
+docs/GIT_WORKFLOW.md (15分钟)
   ↓
-docs/ARCHITECTURE.md (10分钟，快速浏览)
+docs/CHECKLIST.md (10分钟)
+  ↓
+docs/ARCHITECTURE.md (10分钟)
   ↓
 开始组织团队！
 ```
@@ -278,7 +315,10 @@ docs/ARCHITECTURE.md (10分钟，快速浏览)
 → 看 [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)
 
 **"Git工作流程是什么？"**
-→ 看 [团队协作与项目管理规范.md](./团队协作与项目管理规范.md)
+→ 看 [docs/GIT_WORKFLOW.md](./docs/GIT_WORKFLOW.md)
+
+**"我的任务和分工是什么？"**
+→ 看 [docs/TEAM_ASSIGNMENT_V2.md](./docs/TEAM_ASSIGNMENT_V2.md)
 
 **"代码规范和提交规范是什么？"**
 → 看 [docs/CODE_STANDARDS.md](./docs/CODE_STANDARDS.md)
