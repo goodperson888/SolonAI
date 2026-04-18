@@ -32,24 +32,24 @@ Solon AI - LangGraph 主工作流
     返回给用户
 """
 
-import sys
 import os
+import sys
 from typing import Any, Dict
 
-from langgraph.graph import StateGraph, END
+from langgraph.graph import END, StateGraph
 
 # 添加项目根目录到路径
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from llm_factory import create_llm
-from agents.intent_agent import IntentAgent
-from agents.data_aggregation_agent import DataAggregationAgent
-from agents.strategy_agent import StrategyAgent
-from agents.risk_agent import RiskAgent
-from agents.validation_agent import ValidationAgent
-from agents.execution_agent import ExecutionAgent
-from agents.monitoring_agent import MonitoringAgent
-from agents.explanation_agent import ExplanationAgent
+from agents.data_aggregation_agent import DataAggregationAgent  # noqa: E402
+from agents.execution_agent import ExecutionAgent  # noqa: E402
+from agents.explanation_agent import ExplanationAgent  # noqa: E402
+from agents.intent_agent import IntentAgent  # noqa: E402
+from agents.monitoring_agent import MonitoringAgent  # noqa: E402
+from agents.risk_agent import RiskAgent  # noqa: E402
+from agents.strategy_agent import StrategyAgent  # noqa: E402
+from agents.validation_agent import ValidationAgent  # noqa: E402
+from llm_factory import create_llm  # noqa: E402
 
 
 def create_workflow():

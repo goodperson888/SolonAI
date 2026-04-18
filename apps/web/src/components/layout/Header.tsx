@@ -13,8 +13,7 @@ export const Header = () => {
     { name: t('nav.dashboard'), href: '/dashboard' },
     { name: t('nav.strategy'), href: '/strategy' },
     { name: 'AI 助手', href: '/ai' },
-    { name: '风控审计', href: '/risk' },
-    { name: '交易历史', href: '/transactions' },
+    { name: '风控中心', href: '/risk' },
   ]
 
   const toggleLanguage = () => {

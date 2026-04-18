@@ -12,13 +12,13 @@ Solon AI - 快速测试脚本
 
 import asyncio
 import json
-import sys
 import os
+import sys
 
 # 添加项目路径
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from graphs.main_graph import run_agent
+from graphs.main_graph import run_agent  # noqa: E402
 
 
 async def test_query_assets():
@@ -35,7 +35,7 @@ async def test_query_assets():
     print(f"\n识别意图: {result.get('intent')}")
     print(f"资产总值: ${result.get('total_value_usd', 0):,.2f}")
     print(f"代币数量: {len(result.get('wallet_assets', []))}")
-    print(f"\nAI 回复:")
+    print("\nAI 回复:")
     print(result.get("explanation", "无回复"))
     print(f"\n是否完成: {result.get('completed')}")
     print(f"错误: {result.get('error', '无')}")
@@ -69,7 +69,7 @@ async def test_generate_strategy():
     if validation.get("warnings"):
         print(f"警告: {validation.get('warnings')}")
 
-    print(f"\nAI 回复:")
+    print("\nAI 回复:")
     print(result.get("explanation", "无回复"))
 
 
@@ -89,7 +89,7 @@ async def test_risk_check():
     print(f"\n风险等级: {risk.get('risk_level', 'N/A')}")
     print(f"安全评分: {risk.get('score', 'N/A')}")
 
-    print(f"\nAI 回复:")
+    print("\nAI 回复:")
     print(result.get("explanation", "无回复"))
 
 
@@ -104,7 +104,7 @@ async def test_chat():
     )
 
     print(f"\n识别意图: {result.get('intent')}")
-    print(f"\nAI 回复:")
+    print("\nAI 回复:")
     print(result.get("explanation", "无回复"))
 
 

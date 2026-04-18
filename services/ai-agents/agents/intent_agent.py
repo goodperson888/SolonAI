@@ -12,7 +12,6 @@ IntentAgent - 意图理解
 - chat: 普通聊天（"Solana是什么"）
 """
 
-import json
 from typing import Any, Dict
 
 from base_agent import BaseAgent
