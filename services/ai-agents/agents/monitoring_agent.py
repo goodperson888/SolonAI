@@ -48,7 +48,7 @@ class MonitoringAgent(BaseAgent):
     async def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """监控策略状态"""
         strategy = state.get("strategy", {})
-        transaction = state.get("transaction", {})
+        # transaction = state.get("transaction", {})
 
         # TODO: 后续对接真实的链上数据
         # 目前返回模拟的监控结果

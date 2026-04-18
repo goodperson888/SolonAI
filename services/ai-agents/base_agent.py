@@ -38,6 +38,7 @@ class BaseAgent(ABC):
         """系统提示词，子类必须实现"""
         pass
 
+    @abstractmethod
     def _build_prompt(self):
         """占位，兼容子类"""
         pass
