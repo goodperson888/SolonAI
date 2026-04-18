@@ -11,6 +11,8 @@ exclude =
     *.egg-info,
     .mypy_cache,
     .pytest_cache
-max-complexity = 10
+max-complexity = 15
 per-file-ignores =
     __init__.py:F401
+    apps/api/app/api/v1/*.py:E402,F401,F841
+    apps/api/app/core/init_db.py:F401

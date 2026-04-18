@@ -1,17 +1,27 @@
-import sys
+"""
+资产诊断 API
+
+提供资产查询、诊断、盈亏分析等接口
+"""
+
 import os
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+import sys
 from typing import List, Optional
 
-# 添加区块链服务路径 - 从当前文件向上找到项目根目录
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+# 添加区块链服务路径
 current_dir = os.path.dirname(os.path.abspath(__file__))
-# apps/api/app/api/v1 -> apps/api/app/api -> apps/api/app -> apps/api -> apps -> project_root
 project_root = os.path.abspath(os.path.join(current_dir, "..", "..", "..", "..", ".."))
 services_path = os.path.join(project_root, "services")
 sys.path.insert(0, services_path)
 
-from blockchain.solana_client import SolanaClient
+from app.core.database import get_db  # noqa: E402
+from app.models import User  # noqa: E402
+from blockchain.solana_client import SolanaClient  # noqa: E402
 
 router = APIRouter()
 
@@ -22,7 +32,8 @@ router = APIRouter()
 class TokenAsset(BaseModel):
     """Token 资产"""
 
-    token: str  # Token 符号
+    symbol: str  # Token 符号
+    name: str  # Token 名称
     mint: Optional[str] = None  # Mint 地址
     balance: float  # 余额
     price_usd: float  # 美元价格
@@ -38,6 +49,38 @@ class WalletAssets(BaseModel):
     sol_value_usd: float  # SOL 价值
     tokens: List[TokenAsset]  # Token 列表
     total_value_usd: float  # 总价值
+
+
+class PnLAnalysis(BaseModel):
+    """盈亏分析"""
+
+    total_profit: float  # 总盈利
+    total_loss: float  # 总亏损
+    net_profit: float  # 净盈利
+    roi: float  # 投资回报率
+    win_rate: float  # 胜率
+
+
+class RiskFactor(BaseModel):
+    """风险因素"""
+
+    category: str  # 风险类别
+    severity: str  # 严重程度：low/medium/high
+    description: str  # 描述
+    suggestion: str  # 建议
+
+
+class AssetDiagnosis(BaseModel):
+    """资产诊断"""
+
+    wallet_address: str
+    overall_risk: str  # 总体风险：low/medium/high
+    risk_score: float  # 风险评分 0-100
+    risk_factors: List[RiskFactor]  # 风险因素列表
+    suggestions: List[str]  # 优化建议
+
+
+# ===== API 接口 =====
 
 
 @router.get("/{wallet_address}", response_model=WalletAssets)
@@ -58,7 +101,7 @@ async def get_assets(wallet_address: str):
         sol_balance = await client.get_sol_balance(wallet_address)
 
         # 获取 Token 账户（暂时返回空列表，后续实现 Token 解析）
-        token_accounts = await client.get_token_accounts(wallet_address)
+        await client.get_token_accounts(wallet_address)  # noqa: F841
 
         # 关闭客户端
         await client.close()
@@ -86,14 +129,85 @@ async def get_assets(wallet_address: str):
         raise HTTPException(status_code=500, detail=f"获取资产失败: {str(e)}")
 
 
-@router.get("/{wallet_address}/diagnosis")
+@router.get("/{wallet_address}/diagnosis", response_model=AssetDiagnosis)
 async def diagnose_assets(wallet_address: str):
     """
     资产诊断
 
-    TODO: 实现资产诊断逻辑
-    - 盈亏分析
-    - 风险诊断
-    - 收益优化建议
+    分析资产风险、提供优化建议
     """
-    return {"wallet_address": wallet_address, "message": "资产诊断接口 - 待实现"}
+    try:
+        # TODO: 实现真实的风险诊断逻辑
+        # 这里返回 mock 数据
+
+        risk_factors = [
+            RiskFactor(
+                category="授权风险",
+                severity="low",
+                description="检测到 2 个活跃的代币授权",
+                suggestion="定期检查并撤销不再使用的授权",
+            ),
+            RiskFactor(
+                category="资产集中度",
+                severity="medium",
+                description="90% 的资产集中在 SOL",
+                suggestion="考虑适当分散投资，降低单一资产风险",
+            ),
+        ]
+
+        suggestions = [
+            "您的闲置 SOL 可以存入 MarginFi 赚取 4.2% 年化收益",
+            "建议将部分资产配置到稳定币，降低波动风险",
+            "定期检查并撤销不再使用的代币授权",
+        ]
+
+        return AssetDiagnosis(
+            wallet_address=wallet_address,
+            overall_risk="low",
+            risk_score=25.5,
+            risk_factors=risk_factors,
+            suggestions=suggestions,
+        )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"资产诊断失败: {str(e)}")
+
+
+@router.get("/{wallet_address}/pnl", response_model=PnLAnalysis)
+async def get_pnl(
+    wallet_address: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    盈亏分析
+
+    分析用户的历史交易盈亏
+    """
+    try:
+        # 查找用户
+        result = await db.execute(select(User).where(User.wallet_address == wallet_address))
+        user = result.scalar_one_or_none()
+
+        if not user:
+            # 新用户，返回空数据
+            return PnLAnalysis(
+                total_profit=0.0,
+                total_loss=0.0,
+                net_profit=0.0,
+                roi=0.0,
+                win_rate=0.0,
+            )
+
+        # TODO: 查询用户的交易记录，计算盈亏
+        # 这里返回 mock 数据
+
+        return PnLAnalysis(
+            total_profit=1250.50,
+            total_loss=320.80,
+            net_profit=929.70,
+            roi=15.6,
+            win_rate=68.5,
+        )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"盈亏分析失败: {str(e)}")

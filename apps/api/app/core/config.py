@@ -18,8 +18,8 @@ class Settings(BaseSettings):
         "https://*.vercel.app",
     ]
 
-    # 数据库配置
-    DATABASE_URL: str = "postgresql://user:password@localhost:5432/solon_ai"
+    # 数据库配置（使用 SQLite 本地测试）
+    DATABASE_URL: str = "sqlite+aiosqlite:///./solon_ai.db"
 
     # Redis配置
     REDIS_URL: str = "redis://localhost:6379"
