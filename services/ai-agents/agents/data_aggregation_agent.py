@@ -5,18 +5,17 @@ DataAggregationAgent - 数据聚合
 集成真实的 Solana 区块链数据。
 """
 
-from typing import Any, Dict
-import sys
 import os
+import sys
+from typing import Any, Dict
 
 # 添加 blockchain 服务路径
 current_dir = os.path.dirname(os.path.abspath(__file__))
 services_root = os.path.abspath(os.path.join(current_dir, "..", ".."))
 sys.path.insert(0, services_root)
 
-from base_agent import BaseAgent
-from blockchain.solana_client import SolanaClient
-
+from base_agent import BaseAgent  # noqa: E402
+from blockchain.solana_client import SolanaClient  # noqa: E402
 
 # ===== Mock DeFi 协议数据（后续可对接真实协议 API）=====
 
@@ -80,8 +79,8 @@ class DataAggregationAgent(BaseAgent):
                 print(f"[DataAggregationAgent] 钱包地址: {wallet_address}")
                 print(f"[DataAggregationAgent] SOL 余额: {sol_balance}")
 
-                # 获取 Token 账户
-                token_accounts = await solana_client.get_token_accounts(wallet_address)
+                # 获取 Token 账户（暂未使用，待实现）
+                # token_accounts = await solana_client.get_token_accounts(wallet_address)
 
                 # TODO: 接入价格 API，暂时使用固定价格
                 sol_price = 178.32
@@ -91,15 +90,20 @@ class DataAggregationAgent(BaseAgent):
 
                 # 添加 SOL
                 if sol_balance > 0:
-                    wallet_assets.append({
-                        "token": "SOL",
-                        "balance": sol_balance,
-                        "price_usd": sol_price,
-                        "value_usd": sol_balance * sol_price,
-                    })
-                    print(f"[DataAggregationAgent] 添加 SOL 资产: {sol_balance} SOL = ${sol_balance * sol_price}")
+                    wallet_assets.append(
+                        {
+                            "token": "SOL",
+                            "balance": sol_balance,
+                            "price_usd": sol_price,
+                            "value_usd": sol_balance * sol_price,
+                        }
+                    )
+                    print(
+                        "[DataAggregationAgent] 添加 SOL 资产: "
+                        f"{sol_balance} SOL = ${sol_balance * sol_price}"
+                    )
                 else:
-                    print(f"[DataAggregationAgent] SOL 余额为 0，不添加资产")
+                    print("[DataAggregationAgent] SOL 余额为 0，不添加资产")
 
                 # TODO: 解析 Token 账户数据
                 # 目前 token_accounts 返回原始数据，需要进一步解析
@@ -111,6 +115,7 @@ class DataAggregationAgent(BaseAgent):
             except Exception as e:
                 print(f"Error fetching wallet assets: {e}")
                 import traceback
+
                 traceback.print_exc()
                 # 如果获取失败，使用空数据
                 state["wallet_assets"] = []

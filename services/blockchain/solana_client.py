@@ -8,11 +8,11 @@ Solana 区块链客户端
 """
 
 import os
-from typing import List, Dict, Optional
-from solders.pubkey import Pubkey
+from typing import Dict, List, Optional
+
 from solana.rpc.async_api import AsyncClient
 from solana.rpc.commitment import Confirmed
-from spl.token.async_client import AsyncToken
+from solders.pubkey import Pubkey
 from spl.token.constants import TOKEN_PROGRAM_ID
 
 
@@ -26,9 +26,7 @@ class SolanaClient:
         Args:
             rpc_url: Solana RPC 节点地址，默认使用 Devnet
         """
-        self.rpc_url = rpc_url or os.getenv(
-            "SOLANA_RPC_URL", "https://api.devnet.solana.com"
-        )
+        self.rpc_url = rpc_url or os.getenv("SOLANA_RPC_URL", "https://api.devnet.solana.com")
         self.client = AsyncClient(self.rpc_url, commitment=Confirmed)
 
     async def get_sol_balance(self, wallet_address: str) -> float:
@@ -85,9 +83,7 @@ class SolanaClient:
             print(f"获取 Token 账户失败: {e}")
             return []
 
-    async def get_token_balance(
-        self, wallet_address: str, token_mint: str
-    ) -> Optional[float]:
+    async def get_token_balance(self, wallet_address: str, token_mint: str) -> Optional[float]:
         """
         获取指定 Token 的余额
 
@@ -99,7 +95,8 @@ class SolanaClient:
             Token 余额
         """
         try:
-            token_accounts = await self.get_token_accounts(wallet_address)
+            # 获取 token accounts（暂未使用，待实现）
+            # token_accounts = await self.get_token_accounts(wallet_address)
 
             # 这里需要解析 token account data 来获取余额
             # 简化实现：返回 None 表示需要进一步实现
