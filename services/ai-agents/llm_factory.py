@@ -5,9 +5,8 @@ Solon AI - LLM 工厂
 支持 DeepSeek、通义千问、豆包、OpenAI 等所有 OpenAI 兼容接口。
 """
 
-from langchain_openai import ChatOpenAI
-
 from config import llm_config
+from langchain_openai import ChatOpenAI
 
 
 def create_llm(

@@ -8,7 +8,6 @@ from typing import Any, Dict
 
 from base_agent import BaseAgent
 
-
 # 已知协议白名单
 KNOWN_PROTOCOLS = [
     "MarginFi",
@@ -40,7 +39,7 @@ class ValidationAgent(BaseAgent):
     async def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """验证策略和风控结果"""
         strategy = state.get("strategy", {})
-        risk_assessment = state.get("risk_assessment", {})
+        # risk_assessment = state.get("risk_assessment", {})
 
         errors = []
         warnings = []

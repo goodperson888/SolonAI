@@ -52,7 +52,7 @@ class BaseAgent(ABC):
         Returns:
             大模型的回复文本
         """
-        from langchain_core.messages import SystemMessage, HumanMessage
+        from langchain_core.messages import HumanMessage, SystemMessage
 
         try:
             messages = [
@@ -84,7 +84,7 @@ class BaseAgent(ABC):
             if text.startswith("```"):
                 lines = text.split("\n")
                 # 去掉首尾的 ```
-                lines = [l for l in lines if not l.strip().startswith("```")]
+                lines = [line for line in lines if not line.strip().startswith("```")]
                 text = "\n".join(lines)
             return json.loads(text)
         except json.JSONDecodeError:
