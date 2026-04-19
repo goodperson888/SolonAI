@@ -8,7 +8,10 @@ import uuid
 from datetime import datetime
 from typing import List, Optional
 
+from app.core.cache import cache_get_json, cache_set_json
+from app.core.config import settings
 from app.core.database import get_db
+from app.core.redis import get_redis
 from app.models import Transaction, User
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -81,13 +84,18 @@ class Alert(BaseModel):
 
 
 @router.get("/assessment", response_model=RiskAssessment)
-async def get_risk_assessment(wallet_address: str):
+async def get_risk_assessment(wallet_address: str, redis=Depends(get_redis)):
     """
     风险评估
 
     分析钱包的整体风险状况
     """
     try:
+        cache_key = f"risk:assessment:{wallet_address}"
+        cached = await cache_get_json(redis, cache_key)
+        if cached is not None:
+            return cached
+
         # TODO: 实现真实的风险评估逻辑
         # 调用 AI Agent 的 RiskAgent
 
@@ -112,13 +120,15 @@ async def get_risk_assessment(wallet_address: str):
             ),
         ]
 
-        return RiskAssessment(
+        response = RiskAssessment(
             wallet_address=wallet_address,
             overall_risk="low",
             risk_score=28.5,
             risk_factors=risk_factors,
             checked_at=datetime.utcnow(),
         )
+        await cache_set_json(redis, cache_key, response.model_dump(), settings.CACHE_TTL_RISK)
+        return response
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"风险评估失败: {str(e)}")
@@ -129,6 +139,7 @@ async def get_transactions(
     wallet_address: str,
     limit: int = 50,
     db: AsyncSession = Depends(get_db),
+    redis=Depends(get_redis),
 ):
     """
     交易历史
@@ -136,6 +147,11 @@ async def get_transactions(
     查询用户的历史交易记录
     """
     try:
+        cache_key = f"risk:transactions:{wallet_address}:{limit}"
+        cached = await cache_get_json(redis, cache_key)
+        if cached is not None:
+            return cached
+
         # 查找用户
         result = await db.execute(select(User).where(User.wallet_address == wallet_address))
         user = result.scalar_one_or_none()
@@ -152,7 +168,7 @@ async def get_transactions(
         )
         transactions = result.scalars().all()
 
-        return [
+        payload = [
             TransactionItem(
                 id=str(tx.id),
                 tx_type=tx.tx_type.value,
@@ -166,19 +182,31 @@ async def get_transactions(
             )
             for tx in transactions
         ]
+        await cache_set_json(
+            redis,
+            cache_key,
+            [item.model_dump() for item in payload],
+            settings.CACHE_TTL_RISK,
+        )
+        return payload
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"查询交易历史失败: {str(e)}")
 
 
 @router.get("/alerts", response_model=List[Alert])
-async def get_alerts(wallet_address: str):
+async def get_alerts(wallet_address: str, redis=Depends(get_redis)):
     """
     实时预警
 
     获取用户的预警信息
     """
     try:
+        cache_key = f"risk:alerts:{wallet_address}"
+        cached = await cache_get_json(redis, cache_key)
+        if cached is not None:
+            return cached
+
         # TODO: 实现真实的预警逻辑
         # 从数据库或缓存中查询预警信息
 
@@ -200,6 +228,12 @@ async def get_alerts(wallet_address: str):
             ),
         ]
 
+        await cache_set_json(
+            redis,
+            cache_key,
+            [item.model_dump() for item in alerts],
+            settings.CACHE_TTL_RISK,
+        )
         return alerts
 
     except Exception as e:
@@ -213,13 +247,18 @@ async def risk_health():
 
 
 @router.get("/authorizations", response_model=List[Authorization])
-async def get_authorizations(wallet_address: str):
+async def get_authorizations(wallet_address: str, redis=Depends(get_redis)):
     """
     获取合约授权列表
 
     查询钱包的所有合约授权
     """
     try:
+        cache_key = f"risk:authorizations:{wallet_address}"
+        cached = await cache_get_json(redis, cache_key)
+        if cached is not None:
+            return cached
+
         # TODO: 实现真实的授权查询逻辑
         # 从链上查询 Token Account 的授权信息
 
@@ -257,6 +296,12 @@ async def get_authorizations(wallet_address: str):
             ),
         ]
 
+        await cache_set_json(
+            redis,
+            cache_key,
+            [item.model_dump() for item in authorizations],
+            settings.CACHE_TTL_RISK,
+        )
         return authorizations
 
     except Exception as e:

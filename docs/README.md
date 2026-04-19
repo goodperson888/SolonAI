@@ -101,6 +101,16 @@
 - 开发技巧
 - 常见问题解决
 
+#### [docs/DATABASE_GUIDE.md](./DATABASE_GUIDE.md)
+**用途**: 数据库开发与部署指南
+**适合**: 后端开发者、项目负责人
+**内容**:
+- SQLite 日常联调方式
+- Docker Postgres 本地联调步骤
+- Supabase 部署路径
+- Postgres 建表 SQL 文件说明
+- 常用数据库查询 SQL
+
 #### [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)
 **用途**: 系统架构和数据流图
 **适合**: 所有开发者（必读）

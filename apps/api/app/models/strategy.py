@@ -11,8 +11,11 @@ from datetime import datetime
 from app.core.database import Base
 from sqlalchemy import JSON, Column, DateTime
 from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import ForeignKey, Numeric, String, Text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import ForeignKey, Numeric, String, Text, Uuid
+
+
+def enum_values(enum_cls):
+    return [member.value for member in enum_cls]
 
 
 class StrategyStatus(str, enum.Enum):
@@ -32,17 +35,17 @@ class Strategy(Base):
     __tablename__ = "strategies"
 
     # 主键
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
     # 外键：所属用户
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    user_id = Column(Uuid(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
 
     # 策略类型
     strategy_type = Column(String(32), nullable=False, index=True)
 
     # 策略状态
     status = Column(
-        SQLEnum(StrategyStatus),
+        SQLEnum(StrategyStatus, values_callable=enum_values, name="strategystatus"),
         nullable=False,
         default=StrategyStatus.DRAFT,
         index=True,

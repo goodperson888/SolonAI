@@ -6,12 +6,16 @@ Solon AI - Agent 基类
 
 import json
 import logging
+import re
 from abc import ABC, abstractmethod
 from typing import Any, Dict
 
 from langchain_openai import ChatOpenAI
 
 logger = logging.getLogger(__name__)
+
+
+THINK_BLOCK_RE = re.compile(r"<think>(.*?)</think>", re.DOTALL | re.IGNORECASE)
 
 
 class BaseAgent(ABC):
@@ -38,10 +42,45 @@ class BaseAgent(ABC):
         """系统提示词，子类必须实现"""
         pass
 
-    @abstractmethod
     def _build_prompt(self):
-        """占位，兼容子类"""
-        pass
+        """Provide a sensible default so simple agents need only define `system_prompt`."""
+        return self.system_prompt
+
+    @staticmethod
+    def _normalize_llm_response(response: Any) -> Dict[str, str]:
+        """
+        Normalize provider-specific response payloads into visible text plus optional reasoning.
+        """
+        content = response.content
+        additional_kwargs = getattr(response, "additional_kwargs", {}) or {}
+
+        reasoning = additional_kwargs.get("reasoning_content", "") or additional_kwargs.get(
+            "thinking", ""
+        )
+
+        if isinstance(content, list):
+            text_parts = []
+            for item in content:
+                if isinstance(item, dict):
+                    item_type = item.get("type")
+                    if item_type in {"thinking", "reasoning"} and item.get("text"):
+                        reasoning = reasoning or item["text"]
+                    elif item_type == "text" and item.get("text"):
+                        text_parts.append(item["text"])
+                elif isinstance(item, str):
+                    text_parts.append(item)
+            content = "\n".join(part.strip() for part in text_parts if part and part.strip())
+
+        content = content or ""
+        think_blocks = THINK_BLOCK_RE.findall(content)
+        if think_blocks and not reasoning:
+            reasoning = "\n\n".join(block.strip() for block in think_blocks if block.strip())
+        content = THINK_BLOCK_RE.sub("", content).strip()
+
+        return {
+            "text": content,
+            "reasoning": reasoning.strip(),
+        }
 
     async def call_llm(self, user_input: str) -> str:
         """
@@ -61,7 +100,23 @@ class BaseAgent(ABC):
                 HumanMessage(content=user_input),
             ]
             response = await self.llm.ainvoke(messages)
-            return response.content
+            normalized = self._normalize_llm_response(response)
+            return normalized["text"]
+        except Exception as e:
+            logger.error(f"[{self.name}] LLM 调用失败: {e}")
+            raise
+
+    async def call_llm_with_metadata(self, user_input: str) -> Dict[str, str]:
+        """Call the model and return both visible text and optional reasoning."""
+        from langchain_core.messages import HumanMessage, SystemMessage
+
+        try:
+            messages = [
+                SystemMessage(content=self.system_prompt),
+                HumanMessage(content=user_input),
+            ]
+            response = await self.llm.ainvoke(messages)
+            return self._normalize_llm_response(response)
         except Exception as e:
             logger.error(f"[{self.name}] LLM 调用失败: {e}")
             raise

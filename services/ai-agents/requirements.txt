@@ -17,8 +17,10 @@ pydantic>=2.0.0
 python-dotenv>=1.0.0
 
 # HTTP 请求
-httpx>=0.25.0
+# Keep aligned with the blockchain service to avoid cross-service env conflicts.
+httpx==0.23.3
 aiohttp>=3.9.0
 
 # 工具
 python-json-logger>=2.0.0
+zstandard>=0.18.0,<0.19.0
