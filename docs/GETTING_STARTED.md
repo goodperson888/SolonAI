@@ -54,6 +54,7 @@ cd ../..
 ```bash
 cp apps/web/.env.example apps/web/.env.local
 cp apps/api/.env.example apps/api/.env
+cp services/ai-agents/.env.example services/ai-agents/.env
 ```
 
 **获取必要的API Key**
@@ -73,10 +74,49 @@ docker-compose up -d
 cd apps/web && npm run dev
 
 # 终端2: 后端
-cd apps/api && uvicorn main:app --reload
+cd apps/api && source .venv/bin/activate && python -m uvicorn main:app --reload
 
 # 终端3: 数据库 (如果没用Docker)
 docker run -d -p 5432:5432 -e POSTGRES_PASSWORD=password postgres:15
+```
+
+#### 5.1 推荐日常模式：SQLite
+
+默认推荐先用 SQLite 做本地联调，不依赖额外数据库服务。
+
+```bash
+cp apps/api/.env.sqlite.example apps/api/.env
+cd apps/api
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+python -m app.core.init_db
+python -m uvicorn main:app --reload --port 8000
+```
+
+也可以在项目根目录直接启动整套前后端：
+
+```bash
+SOLON_DB_MODE=sqlite ./start.sh
+```
+
+#### 5.2 切换开发模式：Postgres
+
+当本地联调稳定后，再切到 Postgres 做开发。项目已经在 `docker-compose.yml` 中提供了本地数据库：
+
+```bash
+cp apps/api/.env.postgres.example apps/api/.env
+docker compose up -d db
+cd apps/api
+source .venv/bin/activate
+python -m app.core.init_postgres
+python -m uvicorn main:app --reload --port 8000
+```
+
+或者使用一键启动脚本：
+
+```bash
+docker compose up -d db
+SOLON_DB_MODE=postgres ./start.sh
 ```
 
 #### 6. 验证环境
@@ -186,10 +226,11 @@ npm run test         # 运行测试
 
 ```bash
 cd apps/api
-uvicorn main:app --reload    # 启动开发服务器
-pytest                       # 运行测试
-black .                      # 代码格式化
-mypy .                       # 类型检查
+source .venv/bin/activate
+python -m uvicorn main:app --reload
+pytest
+black .
+mypy .
 ```
 
 ### Git操作

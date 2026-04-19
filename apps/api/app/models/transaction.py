@@ -9,9 +9,12 @@ import uuid
 from datetime import datetime
 
 from app.core.database import Base
-from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, Numeric, String, Text, Uuid
 from sqlalchemy import Enum as SQLEnum
-from sqlalchemy.dialects.postgresql import UUID
+
+
+def enum_values(enum_cls):
+    return [member.value for member in enum_cls]
 
 
 class TransactionStatus(str, enum.Enum):
@@ -43,12 +46,12 @@ class Transaction(Base):
     __tablename__ = "transactions"
 
     # 主键
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
     # 外键
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    user_id = Column(Uuid(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
     strategy_id = Column(
-        UUID(as_uuid=True), ForeignKey("strategies.id"), nullable=False, index=True
+        Uuid(as_uuid=True), ForeignKey("strategies.id"), nullable=False, index=True
     )
 
     # 链上签名（唯一）
@@ -56,7 +59,7 @@ class Transaction(Base):
 
     # 交易状态
     status = Column(
-        SQLEnum(TransactionStatus),
+        SQLEnum(TransactionStatus, values_callable=enum_values, name="transactionstatus"),
         nullable=False,
         default=TransactionStatus.DRAFT,
         index=True,
@@ -64,7 +67,7 @@ class Transaction(Base):
 
     # 交易类型
     tx_type = Column(
-        SQLEnum(TransactionType),
+        SQLEnum(TransactionType, values_callable=enum_values, name="transactiontype"),
         nullable=False,
         index=True,
     )

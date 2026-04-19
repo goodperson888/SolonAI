@@ -25,17 +25,36 @@ sys.path.insert(
         "..",
         "..",
         "..",
+        "..",
         "services",
         "ai-agents",
     ),
 )
 
+from app.core.cache import cache_delete_by_patterns, cache_get_json, cache_set_json  # noqa: E402
+from app.core.config import settings  # noqa: E402
 from app.core.database import get_db  # noqa: E402
+from app.core.redis import get_redis  # noqa: E402
 from app.models import ChatMessage, ChatSession, User  # noqa: E402
 from app.models.chat_message import MessageRole  # noqa: E402
-from graphs.main_graph import run_agent  # noqa: E402
 
 router = APIRouter()
+
+
+def get_run_agent():
+    """Import AI workflow lazily so missing AI deps do not break API startup."""
+    try:
+        from graphs.main_graph import run_agent  # noqa: WPS433, E402
+
+        return run_agent
+    except ModuleNotFoundError as exc:
+        missing_package = exc.name or "unknown dependency"
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "AI 对话服务依赖未安装，当前无法调用智能体工作流。" f" 缺少依赖: {missing_package}"
+            ),
+        ) from exc
 
 
 # ===== 请求/响应模型 =====
@@ -78,11 +97,115 @@ class MessageItem(BaseModel):
     created_at: datetime
 
 
+async def get_or_create_user(db: AsyncSession, user_key: str) -> User:
+    result = await db.execute(select(User).where(User.wallet_address == user_key))
+    user = result.scalar_one_or_none()
+
+    if user:
+        return user
+
+    user = User(wallet_address=user_key)
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
+async def get_or_create_session(
+    db: AsyncSession,
+    user: User,
+    session_id: str,
+    title: str,
+) -> ChatSession:
+    result = await db.execute(select(ChatSession).where(ChatSession.session_id == session_id))
+    chat_session = result.scalar_one_or_none()
+
+    if chat_session:
+        return chat_session
+
+    chat_session = ChatSession(
+        user_id=user.id,
+        session_id=session_id,
+        title=title[:50],
+    )
+    db.add(chat_session)
+    await db.commit()
+    await db.refresh(chat_session)
+    return chat_session
+
+
+async def save_chat_message(
+    db: AsyncSession,
+    chat_session: ChatSession,
+    role: MessageRole,
+    content: str,
+    intent: str = "",
+    extra_data: Optional[dict] = None,
+) -> None:
+    message = ChatMessage(
+        session_id=chat_session.id,
+        role=role,
+        content=content,
+        intent=intent,
+        extra_data=extra_data,
+    )
+    db.add(message)
+    await db.commit()
+
+
+async def run_chat_agent(
+    request: ChatRequest,
+    wallet_address: str,
+    session_id: str,
+) -> dict:
+    try:
+        run_agent = get_run_agent()
+        return await run_agent(
+            user_input=request.message,
+            wallet_address=wallet_address,
+            session_id=session_id,
+        )
+    except HTTPException as exc:
+        if exc.status_code != 503:
+            raise
+
+        # Allow frontend/API/database integration testing even when optional
+        # AI workflow dependencies are not installed locally.
+        return {
+            "explanation": exc.detail,
+            "intent": "chat_unavailable",
+            "intent_params": {},
+            "validation_result": None,
+        }
+
+
+def build_chat_data(result: dict) -> Optional[dict]:
+    data = {}
+    if result.get("strategy"):
+        data["strategy"] = result["strategy"]
+    if result.get("risk_assessment"):
+        data["risk_assessment"] = result["risk_assessment"]
+    if result.get("transaction"):
+        data["transaction"] = result["transaction"]
+    if result.get("wallet_assets"):
+        data["wallet_assets"] = result["wallet_assets"]
+        data["total_value_usd"] = result.get("total_value_usd", 0)
+    if result.get("monitoring_config"):
+        data["monitoring"] = result["monitoring_config"]
+    if result.get("validation_result"):
+        data["validation"] = result["validation_result"]
+    return data or None
+
+
 # ===== API 接口 =====
 
 
 @router.post("/message", response_model=ChatResponse)
-async def send_message(request: ChatRequest, db: AsyncSession = Depends(get_db)):
+async def send_message(
+    request: ChatRequest,
+    db: AsyncSession = Depends(get_db),
+    redis=Depends(get_redis),
+):
     """
     发送消息给 AI
 
@@ -102,85 +225,63 @@ async def send_message(request: ChatRequest, db: AsyncSession = Depends(get_db))
 
     try:
         # 查找或创建用户
-        user = None
-        if request.wallet_address:
-            result = await db.execute(
-                select(User).where(User.wallet_address == request.wallet_address)
-            )
-            user = result.scalar_one_or_none()
-
-            if not user:
-                user = User(wallet_address=request.wallet_address)
-                db.add(user)
-                await db.commit()
-                await db.refresh(user)
+        wallet_address = request.wallet_address.strip() if request.wallet_address else ""
+        user_key = wallet_address or f"guest:{session_id}"
+        user = await get_or_create_user(db, user_key)
 
         # 查找或创建会话
-        result = await db.execute(select(ChatSession).where(ChatSession.session_id == session_id))
-        chat_session = result.scalar_one_or_none()
-
-        if not chat_session and user:
-            chat_session = ChatSession(
-                user_id=user.id,
-                session_id=session_id,
-                title=request.message[:50],  # 使用第一条消息作为标题
-            )
-            db.add(chat_session)
-            await db.commit()
-            await db.refresh(chat_session)
-
-        # 保存用户消息
-        if chat_session:
-            user_message = ChatMessage(
-                session_id=chat_session.id,
-                role=MessageRole.USER,
-                content=request.message,
-            )
-            db.add(user_message)
-
-        # 调用 AI 智能体工作流
-        result = await run_agent(
-            user_input=request.message,
-            wallet_address=request.wallet_address or "",
-            session_id=session_id,
+        chat_session = await get_or_create_session(
+            db,
+            user,
+            session_id,
+            request.message,
         )
 
+        # 保存用户消息
+        await save_chat_message(
+            db,
+            chat_session,
+            MessageRole.USER,
+            request.message,
+        )
+
+        # 调用 AI 智能体工作流
+        result = await run_chat_agent(request, wallet_address, session_id)
+
         # 保存 AI 回复
-        if chat_session:
-            ai_message = ChatMessage(
-                session_id=chat_session.id,
-                role=MessageRole.ASSISTANT,
-                content=result.get("explanation", ""),
-                intent=result.get("intent", ""),
-                metadata=result,
-            )
-            db.add(ai_message)
-            await db.commit()
+        assistant_extra_data = dict(result)
+        if result.get("reasoning"):
+            assistant_extra_data["reasoning"] = result["reasoning"]
+
+        await save_chat_message(
+            db,
+            chat_session,
+            MessageRole.ASSISTANT,
+            result.get("explanation", ""),
+            result.get("intent", ""),
+            assistant_extra_data,
+        )
+        await cache_delete_by_patterns(
+            redis,
+            [
+                f"chat:sessions:{user_key}:*",
+                f"chat:messages:{session_id}:*",
+            ],
+        )
 
         # 构建附加数据
-        data = {}
-        if result.get("strategy"):
-            data["strategy"] = result["strategy"]
-        if result.get("risk_assessment"):
-            data["risk_assessment"] = result["risk_assessment"]
-        if result.get("transaction"):
-            data["transaction"] = result["transaction"]
-        if result.get("wallet_assets"):
-            data["wallet_assets"] = result["wallet_assets"]
-            data["total_value_usd"] = result.get("total_value_usd", 0)
-        if result.get("monitoring_config"):
-            data["monitoring"] = result["monitoring_config"]
-        if result.get("validation_result"):
-            data["validation"] = result["validation_result"]
+        data = build_chat_data(result)
 
         return ChatResponse(
             reply=result.get("explanation", "抱歉，我暂时无法回答这个问题。"),
             intent=result.get("intent", "chat"),
             intent_params=result.get("intent_params", {}),
             session_id=session_id,
-            data=data if data else None,
+            data=data,
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"AI 服务错误: {str(e)}")
 
@@ -190,11 +291,17 @@ async def get_sessions(
     wallet_address: str,
     limit: int = 20,
     db: AsyncSession = Depends(get_db),
+    redis=Depends(get_redis),
 ):
     """
     获取会话列表
     """
     try:
+        cache_key = f"chat:sessions:{wallet_address}:{limit}"
+        cached = await cache_get_json(redis, cache_key)
+        if cached is not None:
+            return cached
+
         # 查找用户
         result = await db.execute(select(User).where(User.wallet_address == wallet_address))
         user = result.scalar_one_or_none()
@@ -211,7 +318,7 @@ async def get_sessions(
         )
         sessions = result.scalars().all()
 
-        return [
+        payload = [
             SessionItem(
                 id=str(s.id),
                 session_id=s.session_id,
@@ -220,6 +327,13 @@ async def get_sessions(
             )
             for s in sessions
         ]
+        await cache_set_json(
+            redis,
+            cache_key,
+            [item.model_dump() for item in payload],
+            settings.CACHE_TTL_CHAT_SESSIONS,
+        )
+        return payload
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"查询会话列表失败: {str(e)}")
@@ -230,11 +344,17 @@ async def get_messages(
     session_id: str,
     limit: int = 100,
     db: AsyncSession = Depends(get_db),
+    redis=Depends(get_redis),
 ):
     """
     获取会话的历史消息
     """
     try:
+        cache_key = f"chat:messages:{session_id}:{limit}"
+        cached = await cache_get_json(redis, cache_key)
+        if cached is not None:
+            return cached
+
         # 查找会话
         result = await db.execute(select(ChatSession).where(ChatSession.session_id == session_id))
         chat_session = result.scalar_one_or_none()
@@ -251,7 +371,7 @@ async def get_messages(
         )
         messages = result.scalars().all()
 
-        return [
+        payload = [
             MessageItem(
                 id=str(m.id),
                 role=m.role.value,
@@ -261,6 +381,13 @@ async def get_messages(
             )
             for m in messages
         ]
+        await cache_set_json(
+            redis,
+            cache_key,
+            [item.model_dump() for item in payload],
+            settings.CACHE_TTL_CHAT_MESSAGES,
+        )
+        return payload
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"查询消息历史失败: {str(e)}")

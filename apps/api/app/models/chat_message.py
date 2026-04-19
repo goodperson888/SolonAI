@@ -9,9 +9,12 @@ import uuid
 from datetime import datetime
 
 from app.core.database import Base
-from sqlalchemy import JSON, Column, DateTime, ForeignKey, String, Text
+from sqlalchemy import JSON, Column, DateTime, ForeignKey, String, Text, Uuid
 from sqlalchemy import Enum as SQLEnum
-from sqlalchemy.dialects.postgresql import UUID
+
+
+def enum_values(enum_cls):
+    return [member.value for member in enum_cls]
 
 
 class MessageRole(str, enum.Enum):
@@ -28,16 +31,16 @@ class ChatMessage(Base):
     __tablename__ = "chat_messages"
 
     # 主键
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
     # 外键：所属会话
     session_id = Column(
-        UUID(as_uuid=True), ForeignKey("chat_sessions.id"), nullable=False, index=True
+        Uuid(as_uuid=True), ForeignKey("chat_sessions.id"), nullable=False, index=True
     )
 
     # 消息角色
     role = Column(
-        SQLEnum(MessageRole),
+        SQLEnum(MessageRole, values_callable=enum_values, name="messagerole"),
         nullable=False,
         index=True,
     )

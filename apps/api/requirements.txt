@@ -7,6 +7,8 @@ pydantic-settings==2.1.0
 # 数据库
 sqlalchemy==2.0.23
 asyncpg==0.29.0
+aiosqlite==0.20.0
+greenlet==3.0.3
 redis==5.0.1
 
 # 认证
@@ -15,8 +17,14 @@ passlib[bcrypt]==1.7.4
 python-multipart==0.0.6
 
 # HTTP客户端
-httpx==0.25.2
+# Keep aligned with the blockchain service to avoid cross-service env conflicts.
+httpx==0.23.3
 aiohttp==3.9.1
+
+# Solana / blockchain
+solana==0.30.2
+solders==0.18.1
+anchorpy==0.18.0
 
 # 工具
 python-dateutil==2.8.2

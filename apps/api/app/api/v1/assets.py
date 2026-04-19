@@ -19,11 +19,29 @@ project_root = os.path.abspath(os.path.join(current_dir, "..", "..", "..", "..",
 services_path = os.path.join(project_root, "services")
 sys.path.insert(0, services_path)
 
+from app.core.cache import cache_get_json, cache_set_json  # noqa: E402
+from app.core.config import settings  # noqa: E402
 from app.core.database import get_db  # noqa: E402
+from app.core.redis import get_redis  # noqa: E402
 from app.models import User  # noqa: E402
-from blockchain.solana_client import SolanaClient  # noqa: E402
 
 router = APIRouter()
+
+
+def get_solana_client_class():
+    """Import blockchain dependencies lazily so the whole API can still boot."""
+    try:
+        from blockchain.solana_client import SolanaClient  # noqa: WPS433, E402
+
+        return SolanaClient
+    except ModuleNotFoundError as exc:
+        missing_package = exc.name or "unknown dependency"
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "区块链资产服务依赖未安装，当前无法查询链上资产。" f" 缺少依赖: {missing_package}"
+            ),
+        ) from exc
 
 
 # ===== 响应模型 =====
@@ -84,7 +102,7 @@ class AssetDiagnosis(BaseModel):
 
 
 @router.get("/{wallet_address}", response_model=WalletAssets)
-async def get_assets(wallet_address: str):
+async def get_assets(wallet_address: str, redis=Depends(get_redis)):
     """
     获取钱包资产
 
@@ -94,7 +112,13 @@ async def get_assets(wallet_address: str):
     - 计算总价值（美元）
     """
     try:
+        cache_key = f"assets:wallet:{wallet_address}"
+        cached = await cache_get_json(redis, cache_key)
+        if cached is not None:
+            return cached
+
         # 创建 Solana 客户端
+        SolanaClient = get_solana_client_class()
         client = SolanaClient()
 
         # 获取 SOL 余额
@@ -116,7 +140,7 @@ async def get_assets(wallet_address: str):
         # TODO: 解析 Token 账户数据
         tokens = []
 
-        return WalletAssets(
+        response = WalletAssets(
             wallet_address=wallet_address,
             sol_balance=sol_balance,
             sol_price_usd=sol_price,
@@ -124,7 +148,11 @@ async def get_assets(wallet_address: str):
             tokens=tokens,
             total_value_usd=sol_value,
         )
+        await cache_set_json(redis, cache_key, response.model_dump(), settings.CACHE_TTL_ASSETS)
+        return response
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"获取资产失败: {str(e)}")
 

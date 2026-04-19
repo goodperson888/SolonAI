@@ -24,18 +24,42 @@ sys.path.insert(
         "..",
         "..",
         "..",
+        "..",
         "services",
         "ai-agents",
     ),
 )
 
+from app.core.cache import (  # noqa: E402
+    cache_delete,
+    cache_delete_by_patterns,
+    cache_get_json,
+    cache_set_json,
+)
+from app.core.config import settings  # noqa: E402
 from app.core.database import get_db  # noqa: E402
+from app.core.redis import get_redis  # noqa: E402
 from app.models import Strategy, Transaction, User  # noqa: E402
 from app.models.strategy import StrategyStatus  # noqa: E402
 from app.models.transaction import TransactionStatus, TransactionType  # noqa: E402
-from graphs.main_graph import run_agent  # noqa: E402
 
 router = APIRouter()
+
+
+def get_run_agent():
+    """Import AI workflow lazily so missing AI deps do not break API startup."""
+    try:
+        from graphs.main_graph import run_agent  # noqa: WPS433, E402
+
+        return run_agent
+    except ModuleNotFoundError as exc:
+        missing_package = exc.name or "unknown dependency"
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "AI 策略服务依赖未安装，当前无法调用智能体工作流。" f" 缺少依赖: {missing_package}"
+            ),
+        ) from exc
 
 
 # ===== 请求/响应模型 =====
@@ -92,7 +116,11 @@ class TransactionResponse(BaseModel):
 
 
 @router.post("/generate", response_model=StrategyResponse)
-async def generate_strategy(request: StrategyGenerateRequest, db: AsyncSession = Depends(get_db)):
+async def generate_strategy(
+    request: StrategyGenerateRequest,
+    db: AsyncSession = Depends(get_db),
+    redis=Depends(get_redis),
+):
     """
     生成策略
 
@@ -116,6 +144,7 @@ async def generate_strategy(request: StrategyGenerateRequest, db: AsyncSession =
         # 调用 AI Agent 生成策略
         user_input = f"我想用 {request.amount} {request.token} 进行 {request.risk_level} 风险等级的投资，帮我生成一个策略"
 
+        run_agent = get_run_agent()
         agent_result = await run_agent(
             user_input=user_input,
             wallet_address=request.wallet_address,
@@ -142,6 +171,7 @@ async def generate_strategy(request: StrategyGenerateRequest, db: AsyncSession =
         db.add(strategy)
         await db.commit()
         await db.refresh(strategy)
+        await cache_delete_by_patterns(redis, [f"strategy:list:{request.wallet_address}:*"])
 
         return StrategyResponse(
             id=str(strategy.id),
@@ -159,6 +189,8 @@ async def generate_strategy(request: StrategyGenerateRequest, db: AsyncSession =
             created_at=strategy.created_at,
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"生成策略失败: {str(e)}")
 
@@ -168,6 +200,7 @@ async def list_strategies(
     wallet_address: str,
     limit: int = 20,
     db: AsyncSession = Depends(get_db),
+    redis=Depends(get_redis),
 ):
     """
     获取策略列表
@@ -175,6 +208,11 @@ async def list_strategies(
     查询用户的历史策略
     """
     try:
+        cache_key = f"strategy:list:{wallet_address}:{limit}"
+        cached = await cache_get_json(redis, cache_key)
+        if cached is not None:
+            return cached
+
         # 查找用户
         result = await db.execute(select(User).where(User.wallet_address == wallet_address))
         user = result.scalar_one_or_none()
@@ -191,7 +229,7 @@ async def list_strategies(
         )
         strategies = result.scalars().all()
 
-        return [
+        payload = [
             StrategyResponse(
                 id=str(s.id),
                 title=s.title,
@@ -209,24 +247,40 @@ async def list_strategies(
             )
             for s in strategies
         ]
+        await cache_set_json(
+            redis,
+            cache_key,
+            [item.model_dump() for item in payload],
+            settings.CACHE_TTL_STRATEGY,
+        )
+        return payload
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"查询策略列表失败: {str(e)}")
 
 
 @router.get("/{strategy_id}", response_model=StrategyResponse)
-async def get_strategy(strategy_id: str, db: AsyncSession = Depends(get_db)):
+async def get_strategy(
+    strategy_id: str,
+    db: AsyncSession = Depends(get_db),
+    redis=Depends(get_redis),
+):
     """
     获取策略详情
     """
     try:
+        cache_key = f"strategy:detail:{strategy_id}"
+        cached = await cache_get_json(redis, cache_key)
+        if cached is not None:
+            return cached
+
         result = await db.execute(select(Strategy).where(Strategy.id == uuid.UUID(strategy_id)))
         strategy = result.scalar_one_or_none()
 
         if not strategy:
             raise HTTPException(status_code=404, detail="策略不存在")
 
-        return StrategyResponse(
+        response = StrategyResponse(
             id=str(strategy.id),
             title=strategy.title,
             summary=strategy.summary,
@@ -241,6 +295,8 @@ async def get_strategy(strategy_id: str, db: AsyncSession = Depends(get_db)):
             status=strategy.status.value,
             created_at=strategy.created_at,
         )
+        await cache_set_json(redis, cache_key, response.model_dump(), settings.CACHE_TTL_STRATEGY)
+        return response
 
     except ValueError:
         raise HTTPException(status_code=400, detail="无效的策略 ID")
@@ -253,6 +309,7 @@ async def execute_strategy(
     strategy_id: str,
     request: StrategyExecuteRequest,
     db: AsyncSession = Depends(get_db),
+    redis=Depends(get_redis),
 ):
     """
     执行策略
@@ -293,6 +350,14 @@ async def execute_strategy(
         strategy.status = StrategyStatus.APPROVED
         await db.commit()
         await db.refresh(transaction)
+        await cache_delete(redis, f"strategy:detail:{strategy_id}")
+        await cache_delete_by_patterns(
+            redis,
+            [
+                f"strategy:list:{request.wallet_address}:*",
+                f"risk:transactions:{request.wallet_address}:*",
+            ],
+        )
 
         return TransactionResponse(
             id=str(transaction.id),
