@@ -6,21 +6,58 @@ Solon AI - 配置管理
 
 import os
 from dataclasses import dataclass
+from pathlib import Path
 
 from dotenv import load_dotenv
 
-# 加载 .env 文件
-load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+CURRENT_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = CURRENT_DIR.parent.parent
+
+# Load local AI service config first, then allow the API app config to fill in
+# missing shared values during integrated local development.
+load_dotenv(CURRENT_DIR / ".env")
+load_dotenv(PROJECT_ROOT / "apps" / "api" / ".env", override=False)
+
+
+def _clean_env_value(value: str) -> str:
+    """Normalize placeholders/comments from `.env` files into usable values."""
+    if not value:
+        return ""
+
+    cleaned = value.split(" #", 1)[0].strip()
+    placeholders = {
+        "你的API_KEY",
+        "your_api_key",
+        "your_openai_key",
+        "your_deepseek_key",
+        "your-model-endpoint",
+        "你的模型endpoint",
+    }
+    if cleaned in placeholders:
+        return ""
+    return cleaned
+
+
+def _get_first_env(*keys: str, default: str = "") -> str:
+    for key in keys:
+        value = _clean_env_value(os.getenv(key, ""))
+        if value:
+            return value
+    return default
 
 
 @dataclass
 class LLMConfig:
     """大模型配置"""
 
-    provider: str = os.getenv("LLM_PROVIDER", "deepseek")
-    api_key: str = os.getenv("LLM_API_KEY", "")
-    base_url: str = os.getenv("LLM_BASE_URL", "https://api.deepseek.com")
-    model: str = os.getenv("LLM_MODEL", "deepseek-chat")
+    provider: str = _get_first_env("LLM_PROVIDER", default="deepseek")
+    api_key: str = _get_first_env("LLM_API_KEY", "DOUBAO_API_KEY", default="")
+    base_url: str = _get_first_env(
+        "LLM_BASE_URL",
+        "DOUBAO_API_URL",
+        default="https://api.deepseek.com",
+    )
+    model: str = _get_first_env("LLM_MODEL", default="deepseek-chat")
     temperature: float = float(os.getenv("LLM_TEMPERATURE", "0.7"))
     max_tokens: int = int(os.getenv("LLM_MAX_TOKENS", "4096"))
 

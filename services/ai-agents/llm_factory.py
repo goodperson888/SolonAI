@@ -25,10 +25,15 @@ def create_llm(
         max_tokens: 最大输出 token 数
         model: 模型名称，不传就用配置文件的
     """
+    extra_body = None
+    if llm_config.provider.lower() == "minimax":
+        extra_body = {"reasoning_split": True}
+
     return ChatOpenAI(
         openai_api_key=llm_config.api_key,
         openai_api_base=llm_config.base_url,
         model_name=model or llm_config.model,
         temperature=temperature if temperature is not None else llm_config.temperature,
         max_tokens=max_tokens or llm_config.max_tokens,
+        extra_body=extra_body,
     )

@@ -11,8 +11,11 @@ from datetime import datetime
 from app.core.database import Base
 from sqlalchemy import JSON, Column, DateTime
 from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import String
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import String, Uuid
+
+
+def enum_values(enum_cls):
+    return [member.value for member in enum_cls]
 
 
 class RiskLevel(str, enum.Enum):
@@ -37,7 +40,7 @@ class User(Base):
     __tablename__ = "users"
 
     # 主键
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
     # 钱包地址（主登录标识）
     wallet_address = Column(String(64), unique=True, nullable=False, index=True)
@@ -48,7 +51,7 @@ class User(Base):
 
     # 风险偏好
     risk_level = Column(
-        SQLEnum(RiskLevel),
+        SQLEnum(RiskLevel, values_callable=enum_values, name="risklevel"),
         nullable=False,
         default=RiskLevel.BALANCED,
         index=True,
@@ -56,7 +59,7 @@ class User(Base):
 
     # 用户状态
     status = Column(
-        SQLEnum(UserStatus),
+        SQLEnum(UserStatus, values_callable=enum_values, name="userstatus"),
         nullable=False,
         default=UserStatus.ACTIVE,
         index=True,

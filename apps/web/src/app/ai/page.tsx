@@ -30,6 +30,7 @@ export default function AIAssistantPage() {
   const [inputMessage, setInputMessage] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const hasInitializedConversation = useRef(false)
 
   const activeConversation = conversations.find((c) => c.id === activeConversationId)
   const messages = activeConversation?.messages || []
@@ -43,23 +44,37 @@ export default function AIAssistantPage() {
 
   // 创建新对话
   const createNewConversation = () => {
+    const conversationId = crypto.randomUUID()
     const newConv: Conversation = {
-      id: Date.now().toString(),
+      id: conversationId,
       title: '新对话',
       messages: [],
       sessionId: '',
       timestamp: '刚刚',
     }
     setConversations((prev) => [newConv, ...prev])
-    setActiveConversationId(newConv.id)
+    setActiveConversationId(conversationId)
   }
 
   // 如果没有对话，自动创建一个
   useEffect(() => {
-    if (conversations.length === 0) {
-      createNewConversation()
-    }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+    if (hasInitializedConversation.current) return
+    hasInitializedConversation.current = true
+    setConversations((prev) => {
+      if (prev.length > 0) return prev
+      const conversationId = crypto.randomUUID()
+      setActiveConversationId(conversationId)
+      return [
+        {
+          id: conversationId,
+          title: '新对话',
+          messages: [],
+          sessionId: '',
+          timestamp: '刚刚',
+        },
+      ]
+    })
+  }, [])
 
   const handleSend = async () => {
     if (!inputMessage.trim() || isLoading || !activeConversationId) return

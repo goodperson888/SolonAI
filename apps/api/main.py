@@ -1,5 +1,6 @@
 from app.api.v1 import assets, auth, chat, risk, strategy
 from app.core.config import settings
+from app.core.redis import ping_redis, redis_client
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -33,7 +34,16 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy"}
+    redis_ok = await ping_redis()
+    return {
+        "status": "healthy" if redis_ok else "degraded",
+        "redis": "connected" if redis_ok else "disconnected",
+    }
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    await redis_client.aclose()
 
 
 if __name__ == "__main__":

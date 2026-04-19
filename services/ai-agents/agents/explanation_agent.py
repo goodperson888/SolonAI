@@ -51,8 +51,9 @@ class ExplanationAgent(BaseAgent):
             # 普通聊天
             prompt_input = f"用户说：{state.get('user_input', '')}\n请用友好的语气回复。"
 
-        explanation = await self.call_llm(prompt_input)
-        state["explanation"] = explanation
+        llm_result = await self.call_llm_with_metadata(prompt_input)
+        state["explanation"] = llm_result["text"]
+        state["reasoning"] = llm_result["reasoning"]
         state["completed"] = True
         state["current_agent"] = self.name
         return state

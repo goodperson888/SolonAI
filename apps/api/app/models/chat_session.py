@@ -8,8 +8,7 @@ import uuid
 from datetime import datetime
 
 from app.core.database import Base
-from sqlalchemy import Column, DateTime, ForeignKey, String
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Column, DateTime, ForeignKey, String, Uuid
 
 
 class ChatSession(Base):
@@ -18,10 +17,10 @@ class ChatSession(Base):
     __tablename__ = "chat_sessions"
 
     # 主键
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
     # 外键：所属用户
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    user_id = Column(Uuid(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
 
     # 会话 ID（用于前端标识）
     session_id = Column(String(64), unique=True, nullable=False, index=True)
