@@ -10,6 +10,7 @@ from typing import Any, Dict
 
 from base_agent import BaseAgent
 
+
 class StrategyAgent(BaseAgent):
     name = "strategy_agent"
     description = "基于用户需求生成DeFi策略"

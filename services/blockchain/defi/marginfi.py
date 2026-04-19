@@ -5,6 +5,7 @@ MarginFi借贷协议集成
 
 from typing import Any, Dict, List, Optional
 
+
 class MarginFiClient:
     """MarginFi借贷协议客户端"""
 

@@ -13,6 +13,7 @@ from sqlalchemy import JSON, Column, DateTime, ForeignKey, Numeric, String, Text
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.dialects.postgresql import UUID
 
+
 class StrategyStatus(str, enum.Enum):
     """策略状态枚举"""
 

@@ -20,6 +20,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from graphs.main_graph import run_agent  # noqa: E402
 
+
 async def test_query_assets():
     """测试场景1：查询资产"""
     print("\n" + "=" * 60)

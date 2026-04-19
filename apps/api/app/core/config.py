@@ -2,6 +2,7 @@ from typing import List
 
 from pydantic_settings import BaseSettings
 
+
 class Settings(BaseSettings):
     # 项目信息
     PROJECT_NAME: str = "Solon AI API"

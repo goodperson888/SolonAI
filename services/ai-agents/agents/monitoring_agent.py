@@ -10,6 +10,7 @@ from typing import Any, Dict
 
 from base_agent import BaseAgent
 
+
 class MonitoringAgent(BaseAgent):
     name = "monitoring_agent"
     description = "监控策略执行状态，生成预警"

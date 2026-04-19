@@ -13,6 +13,7 @@ from sqlalchemy import JSON, Column, DateTime, ForeignKey, String, Text
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.dialects.postgresql import UUID
 
+
 class MessageRole(str, enum.Enum):
     """消息角色枚举"""
 

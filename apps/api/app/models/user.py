@@ -13,6 +13,7 @@ from sqlalchemy import JSON, Column, DateTime, String
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.dialects.postgresql import UUID
 
+
 class RiskLevel(str, enum.Enum):
     """风险偏好枚举"""
 

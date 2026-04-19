@@ -16,6 +16,7 @@ from typing import Any, Dict
 
 from base_agent import BaseAgent
 
+
 class IntentAgent(BaseAgent):
     name = "intent_agent"
     description = "理解用户意图，提取关键参数"

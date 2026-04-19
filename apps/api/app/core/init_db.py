@@ -9,6 +9,7 @@ import asyncio
 from app.core.database import Base, engine
 from app.models import ChatMessage, ChatSession, Strategy, Transaction, User  # noqa: F401
 
+
 async def init_db():
     """初始化数据库"""
     async with engine.begin() as conn:

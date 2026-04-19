@@ -7,6 +7,7 @@ from typing import Any, Dict, List
 
 import httpx
 
+
 class JupiterClient:
     """Jupiter聚合交易客户端"""
 
