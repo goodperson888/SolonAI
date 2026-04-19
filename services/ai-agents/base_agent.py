@@ -30,17 +30,11 @@ class BaseAgent(ABC):
 
     def __init__(self, llm: ChatOpenAI):
         self.llm = llm
-        self.prompt = self._build_prompt()
 
     @property
     @abstractmethod
     def system_prompt(self) -> str:
         """系统提示词，子类必须实现"""
-        pass
-
-    @abstractmethod
-    def _build_prompt(self):
-        """占位，兼容子类"""
         pass
 
     async def call_llm(self, user_input: str) -> str:

@@ -114,9 +114,7 @@ async def generate_strategy(request: StrategyGenerateRequest, db: AsyncSession =
             await db.refresh(user)
 
         # 调用 AI Agent 生成策略
-        user_input = (
-            f"我想用 {request.amount} {request.token} 进行 {request.risk_level} 风险等级的投资，帮我生成一个策略"
-        )
+        user_input = f"我想用 {request.amount} {request.token} 进行 {request.risk_level} 风险等级的投资，帮我生成一个策略"
 
         agent_result = await run_agent(
             user_input=user_input,
