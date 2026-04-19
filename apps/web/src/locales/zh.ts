@@ -75,8 +75,8 @@ export const zh = {
   },
   chat: {
     empty: '开始与 AI 助手对话',
-    emptyHint: '你可以询问资产分析、策略建议和风险管理问题',
-    placeholder: '输入你的问题...',
+    emptyHint: '您可以询问资产分析、策略建议和风险管理等问题',
+    placeholder: '输入您的问题...',
     send: '发送',
   },
   strategy: {
