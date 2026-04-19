@@ -13,7 +13,6 @@ from typing import Any, Dict
 
 from base_agent import BaseAgent
 
-
 class ExecutionAgent(BaseAgent):
     name = "execution_agent"
     description = "将策略转换为链上交易指令"

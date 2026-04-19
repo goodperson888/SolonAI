@@ -10,7 +10,6 @@ from typing import Any, Dict
 
 from base_agent import BaseAgent
 
-
 class RiskAgent(BaseAgent):
     name = "risk_agent"
     description = "策略和交易的风控审计"

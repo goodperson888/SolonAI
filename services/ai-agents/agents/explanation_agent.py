@@ -10,7 +10,6 @@ from typing import Any, Dict
 
 from base_agent import BaseAgent
 
-
 class ExplanationAgent(BaseAgent):
     name = "explanation_agent"
     description = "把专业内容翻译成大白话"

@@ -9,7 +9,6 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
-
 class AgentState(BaseModel):
     """
     全局状态，在所有 Agent 之间传递

@@ -8,7 +8,6 @@ Solon AI - LLM 工厂
 from config import llm_config
 from langchain_openai import ChatOpenAI
 
-
 def create_llm(
     temperature: float = None,
     max_tokens: int = None,

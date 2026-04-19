@@ -11,7 +11,6 @@ from app.core.database import Base
 from sqlalchemy import Column, DateTime, ForeignKey, String
 from sqlalchemy.dialects.postgresql import UUID
 
-
 class ChatSession(Base):
     """会话表"""
 
