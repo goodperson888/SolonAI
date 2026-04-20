@@ -83,7 +83,7 @@ export const ChatWindow: React.FC = () => {
   return (
     <div className="flex h-full flex-col">
       {/* Messages */}
-      <div className="flex-1 space-y-4 overflow-y-auto p-4">
+      <div className="flex-1 space-y-1 overflow-y-auto p-4">
         {messages.length === 0 ? (
           <div className="flex h-full items-center justify-center">
             <div className="text-center">

@@ -16,7 +16,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
 
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
-      <div className={`max-w-[70%] ${isUser ? 'order-2' : 'order-1'}`}>
+      <div className={`${isUser ? 'order-2 max-w-[70%]' : 'order-1 max-w-[92%]'}`}>
         {/* Avatar */}
         <div className="flex items-start space-x-3">
           {!isUser && (
@@ -28,7 +28,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
           {/* Message Content */}
           <div className="flex-1">
             <div
-              className={`rounded-2xl px-4 py-3 ${
+              className={`rounded-2xl px-2 py-2 ${
                 isUser
                   ? 'bg-gradient-to-br from-indigo-600 to-purple-600 text-white'
                   : 'bg-gray-800 text-gray-100'
