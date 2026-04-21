@@ -12,6 +12,8 @@ from typing import Any, Dict
 
 from langchain_openai import ChatOpenAI
 
+from error_handler import AgentError, ErrorSeverity, LLMError, error_handler, llm_circuit_breaker
+
 logger = logging.getLogger(__name__)
 
 
@@ -82,56 +84,152 @@ class BaseAgent(ABC):
             "reasoning": reasoning.strip(),
         }
 
-    async def call_llm(self, user_input: str) -> str:
+    async def call_llm(self, user_input: str, chat_history: list = None) -> str:
         """
-        调用大模型
+        调用大模型（带熔断器保护）
 
         Args:
             user_input: 用户输入
+            chat_history: 对话历史 [{"role": "user/assistant", "content": "..."}]
 
         Returns:
             大模型的回复文本
         """
-        from langchain_core.messages import HumanMessage, SystemMessage
+        from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+
+        # 检查熔断器
+        if not llm_circuit_breaker.can_execute():
+            raise LLMError(
+                "LLM 服务暂时不可用，请稍后重试",
+                severity=ErrorSeverity.HIGH,
+                details={"circuit_breaker": "open"}
+            )
 
         try:
-            messages = [
-                SystemMessage(content=self.system_prompt),
-                HumanMessage(content=user_input),
-            ]
+            messages = [SystemMessage(content=self.system_prompt)]
+            # 添加对话历史
+            if chat_history:
+                for msg in chat_history[-10:]:  # 最多10条历史
+                    if msg["role"] == "user":
+                        messages.append(HumanMessage(content=msg["content"]))
+                    else:
+                        messages.append(AIMessage(content=msg["content"]))
+            messages.append(HumanMessage(content=user_input))
             response = await self.llm.ainvoke(messages)
             normalized = self._normalize_llm_response(response)
+
+            # 记录成功
+            llm_circuit_breaker.record_success()
             return normalized["text"]
+
         except Exception as e:
             logger.error(f"[{self.name}] LLM 调用失败: {e}")
-            raise
+            # 记录失败
+            llm_circuit_breaker.record_failure()
+            raise LLMError(
+                f"LLM 调用失败: {str(e)}",
+                severity=ErrorSeverity.MEDIUM,
+                details={"agent": self.name, "error": str(e)}
+            )
 
-    async def call_llm_with_metadata(self, user_input: str) -> Dict[str, str]:
-        """Call the model and return both visible text and optional reasoning."""
-        from langchain_core.messages import HumanMessage, SystemMessage
+    async def call_llm_with_metadata(self, user_input: str, chat_history: list = None) -> Dict[str, str]:
+        """调用大模型并返回文本和推理过程（带熔断器保护）"""
+        from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+
+        # 检查熔断器
+        if not llm_circuit_breaker.can_execute():
+            raise LLMError(
+                "LLM 服务暂时不可用，请稍后重试",
+                severity=ErrorSeverity.HIGH,
+                details={"circuit_breaker": "open"}
+            )
 
         try:
-            messages = [
-                SystemMessage(content=self.system_prompt),
-                HumanMessage(content=user_input),
-            ]
+            messages = [SystemMessage(content=self.system_prompt)]
+            if chat_history:
+                for msg in chat_history[-10:]:
+                    if msg["role"] == "user":
+                        messages.append(HumanMessage(content=msg["content"]))
+                    else:
+                        messages.append(AIMessage(content=msg["content"]))
+            messages.append(HumanMessage(content=user_input))
             response = await self.llm.ainvoke(messages)
+
+            # 记录成功
+            llm_circuit_breaker.record_success()
             return self._normalize_llm_response(response)
+
         except Exception as e:
             logger.error(f"[{self.name}] LLM 调用失败: {e}")
-            raise
+            # 记录失败
+            llm_circuit_breaker.record_failure()
+            raise LLMError(
+                f"LLM 调用失败: {str(e)}",
+                severity=ErrorSeverity.MEDIUM,
+                details={"agent": self.name, "error": str(e)}
+            )
 
-    async def call_llm_json(self, user_input: str) -> Dict[str, Any]:
+    async def call_llm_stream(self, user_input: str, chat_history: list = None):
+        """
+        流式调用大模型（带熔断器保护）
+
+        Args:
+            user_input: 用户输入
+            chat_history: 对话历史
+
+        Yields:
+            str: 每个生成的 token
+        """
+        from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+
+        # 检查熔断器
+        if not llm_circuit_breaker.can_execute():
+            raise LLMError(
+                "LLM 服务暂时不可用，请稍后重试",
+                severity=ErrorSeverity.HIGH,
+                details={"circuit_breaker": "open"}
+            )
+
+        try:
+            messages = [SystemMessage(content=self.system_prompt)]
+            if chat_history:
+                for msg in chat_history[-10:]:
+                    if msg["role"] == "user":
+                        messages.append(HumanMessage(content=msg["content"]))
+                    else:
+                        messages.append(AIMessage(content=msg["content"]))
+            messages.append(HumanMessage(content=user_input))
+
+            # 使用 astream 进行流式调用
+            async for chunk in self.llm.astream(messages):
+                if hasattr(chunk, 'content') and chunk.content:
+                    yield chunk.content
+
+            # 记录成功
+            llm_circuit_breaker.record_success()
+
+        except Exception as e:
+            logger.error(f"[{self.name}] LLM 流式调用失败: {e}")
+            # 记录失败
+            llm_circuit_breaker.record_failure()
+            raise LLMError(
+                f"LLM 流式调用失败: {str(e)}",
+                severity=ErrorSeverity.MEDIUM,
+                details={"agent": self.name, "error": str(e)}
+            )
+
+    async def call_llm_json(self, user_input: str, chat_history: list = None) -> Dict[str, Any]:
         """
         调用大模型并解析 JSON 返回
 
         Args:
             user_input: 用户输入
+            chat_history: 对话历史
 
         Returns:
             解析后的 JSON 字典
         """
-        response = await self.call_llm(user_input)
+        response = await self.call_llm(user_input, chat_history)
 
         # 尝试提取 JSON
         try:
@@ -161,13 +259,17 @@ class BaseAgent(ABC):
         pass
 
     async def __call__(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        """让 Agent 可以直接被 LangGraph 调用"""
+        """让 Agent 可以直接被 LangGraph 调用（带重试和降级）"""
         logger.info(f"[{self.name}] 开始处理...")
-        try:
-            result = await self.process(state)
+
+        success, result, error_msg = await error_handler.handle_with_retry(
+            self.process, state, error_context=f"{self.name}"
+        )
+
+        if success and result is not None:
             logger.info(f"[{self.name}] 处理完成")
             return result
-        except Exception as e:
-            logger.error(f"[{self.name}] 处理失败: {e}")
-            state["error"] = f"{self.name} 处理失败: {str(e)}"
-            return state
+
+        # 处理失败，创建降级状态
+        logger.warning(f"[{self.name}] 处理失败，启用降级: {error_msg}")
+        return error_handler._create_fallback_state(state, self.name, error_msg or "未知错误")
