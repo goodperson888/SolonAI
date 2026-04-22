@@ -1,8 +1,9 @@
 """用户知识库 - 基于 FAISS"""
+
 import os
 import pickle
-from typing import List, Optional, Dict
 from pathlib import Path
+from typing import Dict, List, Optional
 
 import faiss
 import numpy as np
@@ -30,8 +31,7 @@ class UserKnowledgeBase:
         self.metadata_path = self.user_dir / "metadata.pkl"
 
         self.embeddings = OpenAIEmbeddings(
-            model="text-embedding-3-small",
-            openai_api_key=os.getenv("OPENAI_API_KEY")
+            model="text-embedding-3-small", openai_api_key=os.getenv("OPENAI_API_KEY")
         )
 
         self.index: Optional[faiss.IndexFlatL2] = None
@@ -43,7 +43,7 @@ class UserKnowledgeBase:
         """加载已有索引或创建新索引"""
         if self.index_path.exists() and self.metadata_path.exists():
             self.index = faiss.read_index(str(self.index_path))
-            with open(self.metadata_path, 'rb') as f:
+            with open(self.metadata_path, "rb") as f:
                 self.metadata = pickle.load(f)
         else:
             # 创建新索引（text-embedding-3-small 的维度是 1536）
@@ -75,13 +75,15 @@ class UserKnowledgeBase:
 
         # 存储元数据
         for i, chunk in enumerate(chunks):
-            self.metadata.append({
-                "id": start_id + i,
-                "document_id": document_id,
-                "chunk_index": i,
-                "content": chunk,
-                "title": title
-            })
+            self.metadata.append(
+                {
+                    "id": start_id + i,
+                    "document_id": document_id,
+                    "chunk_index": i,
+                    "content": chunk,
+                    "title": title,
+                }
+            )
 
         # 保存索引
         self._save_index()
@@ -143,7 +145,7 @@ class UserKnowledgeBase:
             docs_to_readd[doc_id].append(meta)
 
         # 重新生成向量并添加
-        for doc_id, chunks_meta in docs_to_readd.items():
+        for _doc_id, chunks_meta in docs_to_readd.items():
             chunks = [m["content"] for m in chunks_meta]
             embeddings = self.embeddings.embed_documents(chunks)
             embeddings_array = np.array(embeddings, dtype=np.float32)
@@ -160,14 +162,14 @@ class UserKnowledgeBase:
     def _save_index(self):
         """保存索引和元数据到磁盘"""
         faiss.write_index(self.index, str(self.index_path))
-        with open(self.metadata_path, 'wb') as f:
+        with open(self.metadata_path, "wb") as f:
             pickle.dump(self.metadata, f)
 
     def get_stats(self) -> Dict:
         """获取知识库统计信息"""
-        doc_ids = set(m["document_id"] for m in self.metadata)
+        doc_ids = {m["document_id"] for m in self.metadata}
         return {
             "total_chunks": len(self.metadata),
             "total_documents": len(doc_ids),
-            "index_size": self.index.ntotal if self.index else 0
+            "index_size": self.index.ntotal if self.index else 0,
         }
