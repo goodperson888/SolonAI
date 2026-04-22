@@ -1,10 +1,7 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
 import dynamic from 'next/dynamic'
 import './globals.css'
 import '@solana/wallet-adapter-react-ui/styles.css'
-
-const inter = Inter({ subsets: ['latin'] })
 
 // 禁用 SSR，避免 wallet provider 在服务端渲染时报错
 const Providers = dynamic(() => import('@/components/providers/Providers'), {
@@ -19,7 +16,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="zh-CN">
-      <body className={inter.className}>
+      <body className="min-h-screen bg-slate-950 text-white antialiased">
         <Providers>{children}</Providers>
       </body>
     </html>

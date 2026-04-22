@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     CACHE_TTL_CHAT_MESSAGES: int = 120
     CACHE_TTL_STRATEGY: int = 300
     CACHE_TTL_RISK: int = 180
+    DEFI_REFRESH_INTERVAL_SECONDS: int = 120
 
     # JWT配置
     SECRET_KEY: str = "your-secret-key-change-in-production"

@@ -57,7 +57,7 @@ def get_run_agent():
         raise HTTPException(
             status_code=503,
             detail=(
-                "AI 策略服务依赖未安装，当前无法调用智能体工作流。" f" 缺少依赖: {missing_package}"
+                f"AI 策略服务依赖未安装，当前无法调用智能体工作流。 缺少依赖: {missing_package}"
             ),
         ) from exc
 

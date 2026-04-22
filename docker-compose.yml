@@ -7,7 +7,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      NEXT_PUBLIC_API_URL: http://api:8000
+      NEXT_PUBLIC_API_URL: http://localhost:8000
       NEXT_PUBLIC_SOLANA_RPC_URL: ${SOLANA_RPC_URL:-https://api.devnet.solana.com}
       NEXT_PUBLIC_WALLET_ADAPTER_NETWORK: devnet
     depends_on:
@@ -28,9 +28,13 @@ services:
       SOLANA_RPC_URL: ${SOLANA_RPC_URL:-https://api.devnet.solana.com}
       DOUBAO_API_KEY: ${DOUBAO_API_KEY:-}
       SECRET_KEY: ${SECRET_KEY:-your-secret-key-change-in-production}
+      PYTHONPATH: /workspace/services:/workspace/services/ai-agents:/workspace/apps/api
     depends_on:
       - db
       - redis
+    command: >
+      sh -c "python -m app.core.init_db &&
+             uvicorn main:app --host 0.0.0.0 --port 8000"
     networks:
       - solon-network
 

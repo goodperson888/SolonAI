@@ -1,0 +1,36 @@
+"""
+钱包资产数据模型
+"""
+
+from decimal import Decimal
+
+from pydantic import BaseModel, Field
+
+
+class SolBalance(BaseModel):
+    """SOL 余额"""
+
+    lamports: int = Field(description="Lamports 单位余额")
+    sol: Decimal = Field(description="SOL 单位余额")
+    usd_value: Decimal | None = Field(default=None, description="USD 估值")
+
+
+class TokenAccount(BaseModel):
+    """SPL Token 账户"""
+
+    mint: str = Field(description="Token Mint 地址")
+    symbol: str | None = Field(default=None, description="Token 符号")
+    name: str | None = Field(default=None, description="Token 名称")
+    decimals: int = Field(description="小数位数")
+    balance_raw: int = Field(description="原始余额（最小单位）")
+    balance: Decimal = Field(description="人类可读余额")
+    usd_value: Decimal | None = Field(default=None, description="USD 估值")
+
+
+class WalletPortfolio(BaseModel):
+    """钱包资产全景"""
+
+    wallet_address: str = Field(description="钱包地址")
+    sol_balance: SolBalance = Field(description="SOL 余额")
+    tokens: list[TokenAccount] = Field(default_factory=list, description="Token 持仓列表")
+    total_usd_value: Decimal = Field(default=Decimal("0"), description="总 USD 价值")

@@ -9,7 +9,7 @@ import json
 import os
 import sys
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -54,7 +54,7 @@ def get_run_agent():
         raise HTTPException(
             status_code=503,
             detail=(
-                "AI 对话服务依赖未安装，当前无法调用智能体工作流。" f" 缺少依赖: {missing_package}"
+                f"AI 对话服务依赖未安装，当前无法调用智能体工作流。 缺少依赖: {missing_package}"
             ),
         ) from exc
 
@@ -70,7 +70,7 @@ def get_run_agent_stream():
         raise HTTPException(
             status_code=503,
             detail=(
-                "AI 对话服务依赖未安装，当前无法调用智能体工作流。" f" 缺少依赖: {missing_package}"
+                f"AI 对话服务依赖未安装，当前无法调用智能体工作流。 缺少依赖: {missing_package}"
             ),
         ) from exc
 
@@ -160,6 +160,7 @@ async def save_chat_message(
     intent: str = "",
     extra_data: Optional[dict] = None,
 ) -> None:
+    chat_session.updated_at = datetime.now(timezone.utc)
     message = ChatMessage(
         session_id=chat_session.id,
         role=role,

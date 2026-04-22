@@ -69,7 +69,7 @@ def retrieve_user_knowledge(wallet_address: str, query: str, top_k: int = 3) -> 
                 content = result.get("content", "")
                 score = result.get("score", 0)
                 logger.info(
-                    f"[UserKnowledge] 结果 {i+1}: {doc_name}, 评分: {score}, 内容长度: {len(content)}"
+                    f"[UserKnowledge] 结果 {i + 1}: {doc_name}, 评分: {score}, 内容长度: {len(content)}"
                 )
                 parts.append(f"【{doc_name}】\n{content}\n")
 

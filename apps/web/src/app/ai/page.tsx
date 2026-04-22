@@ -4,7 +4,13 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { useWallet } from '@solana/wallet-adapter-react'
 import { Button } from '@/components/ui/Button'
 import { MessageBubble } from '@/components/chat/MessageBubble'
-import { chatApi, knowledgeApi, type KnowledgeDocument } from '@/lib/api-client'
+import {
+  chatApi,
+  knowledgeApi,
+  type ChatMessageItem,
+  type ChatSessionItem,
+  type KnowledgeDocument,
+} from '@/lib/api-client'
 import { Upload, FileText, Trash2, MessageSquare, BookOpen } from 'lucide-react'
 
 interface Message {
@@ -24,22 +30,67 @@ interface Conversation {
   timestamp: string
 }
 
-const INITIAL_CONVERSATION_ID = crypto.randomUUID()
+const STORAGE_KEY_PREFIX = 'solon-ai:chat:'
+const GLOBAL_STORAGE_KEY = `${STORAGE_KEY_PREFIX}last`
+
+function createEmptyConversation(): Conversation {
+  return {
+    id: crypto.randomUUID(),
+    title: '新对话',
+    messages: [],
+    sessionId: '',
+    timestamp: '刚刚',
+  }
+}
+
+function formatRelativeTime(isoString?: string): string {
+  if (!isoString) return '刚刚'
+
+  const timestamp = new Date(isoString)
+  if (Number.isNaN(timestamp.getTime())) return '刚刚'
+
+  const diffMs = Date.now() - timestamp.getTime()
+  if (diffMs < 60_000) return '刚刚'
+  if (diffMs < 3_600_000) return `${Math.floor(diffMs / 60_000)} 分钟前`
+  if (diffMs < 86_400_000) return `${Math.floor(diffMs / 3_600_000)} 小时前`
+
+  return timestamp.toLocaleDateString('zh-CN')
+}
+
+function fromApiMessage(message: ChatMessageItem): Message {
+  return {
+    id: message.id,
+    role: message.role === 'system' ? 'assistant' : message.role,
+    content: message.content,
+    intent: message.intent,
+    timestamp: new Date(message.created_at),
+  }
+}
+
+function fromApiConversation(session: ChatSessionItem, messages: ChatMessageItem[]): Conversation {
+  return {
+    id: session.session_id,
+    title: session.title || '新对话',
+    messages: messages.map(fromApiMessage),
+    sessionId: session.session_id,
+    timestamp: formatRelativeTime(session.created_at),
+  }
+}
+
+function getStorageKey(walletAddress?: string): string {
+  return `${STORAGE_KEY_PREFIX}${walletAddress || 'guest'}`
+}
 
 export default function AIAssistantPage() {
   const { connected, publicKey } = useWallet()
-  const [conversations, setConversations] = useState<Conversation[]>([
-    {
-      id: INITIAL_CONVERSATION_ID,
-      title: '新对话',
-      messages: [],
-      sessionId: '',
-      timestamp: '刚刚',
-    },
+  const walletAddress = connected && publicKey ? publicKey.toBase58() : ''
+  const [conversations, setConversations] = useState<Conversation[]>(() => [
+    createEmptyConversation(),
   ])
-  const [activeConversationId, setActiveConversationId] = useState<string>(INITIAL_CONVERSATION_ID)
+  const [activeConversationId, setActiveConversationId] = useState<string>('')
   const [inputMessage, setInputMessage] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true)
   const [leftPanelMode, setLeftPanelMode] = useState<'conversations' | 'knowledge'>('conversations')
   const [knowledgeDocs, setKnowledgeDocs] = useState<KnowledgeDocument[]>([])
   const [uploading, setUploading] = useState(false)
@@ -51,6 +102,87 @@ export default function AIAssistantPage() {
 
   const activeConversation = conversations.find((c) => c.id === activeConversationId)
   const messages = activeConversation?.messages || []
+
+  useEffect(() => {
+    const loadConversations = async () => {
+      setIsLoadingHistory(true)
+
+      try {
+        if (walletAddress) {
+          const sessions = await chatApi.getSessions(walletAddress)
+          if (sessions.length > 0) {
+            const messageGroups = await Promise.all(
+              sessions.map((session) => chatApi.getMessages(session.session_id))
+            )
+            const restoredConversations = sessions.map((session, index) =>
+              fromApiConversation(session, messageGroups[index])
+            )
+            setConversations(restoredConversations)
+            setActiveConversationId(restoredConversations[0].id)
+            activeIdRef.current = restoredConversations[0].id
+            return
+          }
+        }
+
+        for (const storageKey of [
+          getStorageKey(walletAddress),
+          GLOBAL_STORAGE_KEY,
+          getStorageKey(),
+        ]) {
+          const saved = localStorage.getItem(storageKey)
+          if (!saved) {
+            continue
+          }
+
+          const parsed = JSON.parse(saved) as Conversation[]
+          if (parsed.length === 0) {
+            continue
+          }
+
+          const restored = parsed.map((conversation) => ({
+            ...conversation,
+            messages: conversation.messages.map((message) => ({
+              ...message,
+              timestamp: new Date(message.timestamp),
+            })),
+          }))
+          setConversations(restored)
+          setActiveConversationId(restored[0].id)
+          activeIdRef.current = restored[0].id
+          return
+        }
+
+        const initialConversation = createEmptyConversation()
+        setConversations([initialConversation])
+        setActiveConversationId(initialConversation.id)
+        activeIdRef.current = initialConversation.id
+      } catch (error) {
+        console.error('Failed to load chat history:', error)
+        const fallbackConversation = createEmptyConversation()
+        setConversations([fallbackConversation])
+        setActiveConversationId(fallbackConversation.id)
+        activeIdRef.current = fallbackConversation.id
+      } finally {
+        setIsLoadingHistory(false)
+      }
+    }
+
+    loadConversations()
+  }, [walletAddress])
+
+  useEffect(() => {
+    if (isLoadingHistory) {
+      return
+    }
+
+    if (conversations.length === 0) {
+      return
+    }
+
+    const serialized = JSON.stringify(conversations)
+    localStorage.setItem(getStorageKey(walletAddress), serialized)
+    localStorage.setItem(GLOBAL_STORAGE_KEY, serialized)
+  }, [conversations, isLoadingHistory, walletAddress])
 
   // 加载知识库文档
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -111,17 +243,10 @@ export default function AIAssistantPage() {
 
   // 创建新对话
   const createNewConversation = () => {
-    const conversationId = crypto.randomUUID()
-    const newConv: Conversation = {
-      id: conversationId,
-      title: '新对话',
-      messages: [],
-      sessionId: '',
-      timestamp: '刚刚',
-    }
+    const newConv = createEmptyConversation()
     setConversations((prev) => [newConv, ...prev])
-    setActiveConversationId(conversationId)
-    activeIdRef.current = conversationId
+    setActiveConversationId(newConv.id)
+    activeIdRef.current = newConv.id
   }
 
   const handleSend = useCallback(async () => {

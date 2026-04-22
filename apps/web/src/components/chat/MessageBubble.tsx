@@ -1,8 +1,5 @@
 'use client'
 
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
-
 interface Message {
   id: string
   role: 'user' | 'assistant'
@@ -40,9 +37,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
               {isUser ? (
                 <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.content}</p>
               ) : (
-                <div className="prose prose-invert prose-sm max-w-none">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
-                </div>
+                <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.content}</p>
               )}
             </div>
 

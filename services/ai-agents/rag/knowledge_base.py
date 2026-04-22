@@ -130,6 +130,7 @@ class RAGKnowledgeBase:
         self.chunks: List[KnowledgeChunk] = []
         self.embedding = SimpleEmbedding(dim=256)
         self.index = None
+        self.vectors: Optional[np.ndarray] = None
         self._initialized = False
 
     def load_documents(self) -> List[KnowledgeChunk]:
@@ -202,8 +203,7 @@ class RAGKnowledgeBase:
         return chunks
 
     def build_index(self):
-        """构建 FAISS 索引"""
-        import faiss
+        """构建检索索引，优先使用 FAISS，缺失时降级为内存向量检索"""
 
         if not self.chunks:
             logger.warning("没有知识片段，跳过索引构建")
@@ -215,20 +215,28 @@ class RAGKnowledgeBase:
 
         # 向量化所有文档
         vectors = self.embedding.embed_batch(texts)
+        self.vectors = vectors
 
-        # 创建 FAISS 索引
-        self.index = faiss.IndexFlatIP(self.embedding.dim)  # 内积相似度（已归一化 = 余弦相似度）
-        self.index.add(vectors)
+        try:
+            import faiss
 
-        logger.info(f"FAISS 索引构建完成，共 {self.index.ntotal} 个向量")
+            # 创建 FAISS 索引
+            self.index = faiss.IndexFlatIP(
+                self.embedding.dim
+            )  # 内积相似度（已归一化 = 余弦相似度）
+            self.index.add(vectors)
+            logger.info(f"FAISS 索引构建完成，共 {self.index.ntotal} 个向量")
+        except ModuleNotFoundError:
+            self.index = None
+            logger.warning("未安装 faiss，降级为内存向量检索")
 
     def save_index(self):
         """保存索引到磁盘"""
-        import faiss
-
         INDEX_DIR.mkdir(parents=True, exist_ok=True)
 
         if self.index:
+            import faiss
+
             faiss.write_index(self.index, str(INDEX_DIR / "knowledge.index"))
 
         # 保存 chunks 元数据
@@ -249,18 +257,14 @@ class RAGKnowledgeBase:
 
     def load_index(self) -> bool:
         """从磁盘加载索引"""
-        import faiss
-
         index_file = INDEX_DIR / "knowledge.index"
         chunks_file = INDEX_DIR / "chunks.json"
         embed_file = INDEX_DIR / "embedding.json"
 
-        if not all(f.exists() for f in [index_file, chunks_file, embed_file]):
+        if not all(f.exists() for f in [chunks_file, embed_file]):
             return False
 
         try:
-            self.index = faiss.read_index(str(index_file))
-
             with open(chunks_file, encoding="utf-8") as f:
                 meta = json.load(f)
             self.chunks = [
@@ -274,6 +278,16 @@ class RAGKnowledgeBase:
                 np.array(embed_data["idf"], dtype=np.float32) if embed_data["idf"] else None
             )
             self.embedding.dim = embed_data["dim"]
+            self.vectors = self.embedding.embed_batch([chunk.content for chunk in self.chunks])
+
+            if index_file.exists():
+                try:
+                    import faiss
+
+                    self.index = faiss.read_index(str(index_file))
+                except ModuleNotFoundError:
+                    self.index = None
+                    logger.warning("未安装 faiss，已从磁盘元数据恢复为内存向量检索")
 
             self._initialized = True
             logger.info(f"从磁盘加载索引成功，共 {len(self.chunks)} 个知识片段")
@@ -310,18 +324,28 @@ class RAGKnowledgeBase:
         if not self._initialized:
             self.load_and_index()
 
-        if not self.index or self.index.ntotal == 0:
+        if self.index is None and (self.vectors is None or len(self.vectors) == 0):
             return []
 
         # 向量化查询
         query_vec = self.embedding.embed(query).reshape(1, -1)
 
         # 搜索
-        k = min(top_k, self.index.ntotal)
-        scores, indices = self.index.search(query_vec, k)
+        if self.index is not None:
+            k = min(top_k, self.index.ntotal)
+            scores, indices = self.index.search(query_vec, k)
+            score_values = scores[0]
+            index_values = indices[0]
+        else:
+            if self.vectors is None or len(self.vectors) == 0:
+                return []
+            similarities = np.dot(self.vectors, query_vec[0])
+            ranked = np.argsort(similarities)[::-1][:top_k]
+            score_values = similarities[ranked]
+            index_values = ranked
 
         results = []
-        for score, idx in zip(scores[0], indices[0]):
+        for score, idx in zip(score_values, index_values):
             if idx < 0 or idx >= len(self.chunks):
                 continue
             if score < 0.05:  # 相似度太低的过滤掉
