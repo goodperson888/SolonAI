@@ -1,6 +1,3 @@
-#!/usr/bin/env sh
-. "$(dirname -- "$0")/_/husky.sh"
-
 # 1. 先运行 lint-staged 自动修复暂存的文件
 npx lint-staged
 
