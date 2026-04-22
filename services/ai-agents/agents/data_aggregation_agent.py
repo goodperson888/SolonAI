@@ -2,26 +2,25 @@
 DataAggregationAgent - 数据聚合
 
 职责：从区块链获取钱包资产、DeFi协议数据等。
-支持 Mock 模式用于开发和测试。
+集成真实的 Solana 区块链数据。
 """
 
 import os
 import sys
-from datetime import datetime
-from typing import Dict
+from typing import Any, Dict
 
 # 添加 blockchain 服务路径
 current_dir = os.path.dirname(os.path.abspath(__file__))
 services_root = os.path.abspath(os.path.join(current_dir, "..", ".."))
 sys.path.insert(0, services_root)
 
-from mock.chain_data import (
-    generate_mock_defi,
-    generate_mock_risk,
-    generate_mock_wallet,
-)
+from base_agent import BaseAgent  # noqa: E402
+from blockchain.services.defi_aggregation_service import DeFiAggregationService  # noqa: E402
+from blockchain.services.wallet_service import WalletService  # noqa: E402
+from blockchain.solana_client import SolanaClient  # noqa: E402
 
-# Mock 模式下的协议数据
+# ===== Mock DeFi 协议数据（后续可对接真实协议 API）=====
+
 MOCK_PROTOCOL_DATA = {
     "marginfi": {
         "name": "MarginFi",
@@ -51,247 +50,129 @@ MOCK_PROTOCOL_DATA = {
     },
 }
 
-# 小协议 TVL 阈值（USD）
-SMALL_PROTOCOL_TVL_THRESHOLD = 100_000_000
 
-
-class DataAggregationAgent:
-    """链上数据聚合Agent - 多源数据聚合、数据清洗、标准化处理"""
-
+class DataAggregationAgent(BaseAgent):
     name = "data_aggregation_agent"
     description = "聚合链上资产和DeFi协议数据"
 
-    def __init__(self, llm=None, blockchain_service=None, use_mock: bool = True):
-        self.llm = llm
-        self.blockchain_service = blockchain_service
-        self.use_mock = use_mock
-        self.system_prompt = """你是Solon AI的链上数据聚合专家。
-你的职责是：
-1. 从多个数据源获取链上数据（Solana RPC、Helius、DeFi协议API）
-2. 清洗和标准化数据格式
-3. 识别异常数据并告警
-4. 实时更新数据缓存
+    def __init__(self, llm):
+        super().__init__(llm)
+        # 不在初始化时创建客户端，每次请求时创建新的
 
-核心能力：
-- 多源数据聚合
-- 数据清洗与验证
-- 标准化处理
-- 实时更新
-- 异常数据告警
-"""
+    @property
+    def system_prompt(self) -> str:
+        return """你是数据聚合助手，负责整理链上数据。
+根据用户意图，筛选并整理相关的链上数据。
+直接返回整理后的数据摘要。"""
 
-    async def aggregate_wallet_data(self, state: Dict) -> Dict:
+    async def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """
-        聚合用户钱包数据
-
-        Args:
-            state: 包含wallet_address的全局状态
-
-        Returns:
-            更新后的state，包含wallet_data字段
+        获取并整理链上数据
         """
         wallet_address = state.get("wallet_address")
 
-        if self.use_mock:
-            wallet_data = generate_mock_wallet(
-                address=wallet_address or "Unknown",
-                include_low_health=True,
-            )
-        else:
-            # 真实模式：调用区块链服务
-            wallet_data = {
-                "address": wallet_address,
-                "balances": {},
-                "nfts": [],
-                "lp_positions": [],
-                "lending_positions": [],
-                "authorizations": [],
-                "total_value_usd": 0.0,
-                "last_updated": None,
-            }
-            if self.blockchain_service:
-                # TODO: 对接真实区块链服务
-                pass
+        if wallet_address:
+            # 每次请求创建新的客户端
+            solana_client = SolanaClient()
 
-        # 数据清洗：过滤零值余额
-        wallet_data["balances"] = {
-            mint: info
-            for mint, info in wallet_data["balances"].items()
-            if info.get("usd_value", 0) > 0
-        }
+            try:
+                # 获取 SOL 余额
+                sol_balance = await solana_client.get_sol_balance(wallet_address)
+                print(f"[DataAggregationAgent] 钱包地址: {wallet_address}")
+                print(f"[DataAggregationAgent] SOL 余额: {sol_balance}")
 
-        # 重新计算 total_value_usd
-        wallet_data["total_value_usd"] = sum(
-            info["usd_value"] for info in wallet_data["balances"].values()
-        )
+                # 获取 Token 账户（暂未使用，待实现）
+                # token_accounts = await solana_client.get_token_accounts(wallet_address)
 
-        # 异常检测：标记价格异常
-        anomaly_detection = []
-        for mint, info in wallet_data["balances"].items():
-            amount = info.get("amount", 0)
-            usd_value = info.get("usd_value", 0)
-            if amount > 0 and usd_value > 0:
-                price_per_unit = usd_value / amount
-                symbol = info.get("token_info", {}).get("symbol", mint[:8])
-                # 简单异常检测逻辑：SOL 价格应在合理范围
-                if symbol == "SOL" and (price_per_unit < 50 or price_per_unit > 500):
-                    anomaly_detection.append(
+                # Prefer the shared real-time price service; fall back to a
+                # conservative zero value rather than stale hard-coded prices.
+                defi_service = DeFiAggregationService()
+                try:
+                    prices = await defi_service.get_realtime_prices()
+                    sol_price = prices.get("SOL", {}).get("price_usd") or 0
+                finally:
+                    await defi_service.close()
+
+                # 转换为 Agent 使用的格式
+                wallet_assets = []
+
+                # 添加 SOL
+                if sol_balance > 0:
+                    wallet_assets.append(
                         {
-                            "type": "price_anomaly",
-                            "token": symbol,
-                            "message": f"{symbol} 价格异常: ${price_per_unit:.2f}",
+                            "token": "SOL",
+                            "balance": sol_balance,
+                            "price_usd": sol_price,
+                            "value_usd": sol_balance * sol_price,
                         }
                     )
+                    print(
+                        "[DataAggregationAgent] 添加 SOL 资产: "
+                        f"{sol_balance} SOL = ${sol_balance * sol_price}"
+                    )
+                else:
+                    print("[DataAggregationAgent] SOL 余额为 0，不添加资产")
 
-        wallet_data["anomaly_detection"] = anomaly_detection
-        wallet_data["last_updated"] = datetime.now().isoformat()
+                try:
+                    wallet_service = WalletService()
+                    try:
+                        portfolio = await wallet_service.get_wallet_portfolio(wallet_address)
+                    finally:
+                        await wallet_service.close()
 
-        state["wallet_data"] = wallet_data
-        return state
+                    for token in portfolio.tokens:
+                        wallet_assets.append(
+                            {
+                                "token": token.symbol or token.mint[:8],
+                                "mint": token.mint,
+                                "balance": float(token.balance),
+                                "price_usd": (
+                                    float(token.usd_value / token.balance)
+                                    if token.usd_value and token.balance
+                                    else 0
+                                ),
+                                "value_usd": float(token.usd_value or 0),
+                            }
+                        )
+                    state["total_value_usd"] = float(portfolio.total_usd_value)
+                except Exception as e:
+                    print(f"[DataAggregationAgent] Token 资产聚合失败，保留 SOL 数据: {e}")
+                    state["total_value_usd"] = sol_balance * sol_price
 
-    async def aggregate_defi_data(self, state: Dict) -> Dict:
-        """
-        聚合DeFi协议数据
+                print(f"[DataAggregationAgent] 最终资产列表: {wallet_assets}")
+                state["wallet_assets"] = wallet_assets
 
-        Args:
-            state: 全局状态
+            except Exception as e:
+                print(f"Error fetching wallet assets: {e}")
+                import traceback
 
-        Returns:
-            更新后的state，包含defi_data字段
-        """
-        if self.use_mock:
-            defi_data = generate_mock_defi()
+                traceback.print_exc()
+                # 如果获取失败，使用空数据
+                state["wallet_assets"] = []
+                state["total_value_usd"] = 0
+            finally:
+                # 关闭客户端连接
+                await solana_client.close()
         else:
-            defi_data = {
-                "lending_protocols": {},
-                "liquidity_pools": {},
-                "staking_protocols": {},
-                "last_updated": None,
-            }
-            if self.blockchain_service:
-                # TODO: 对接真实区块链服务
-                pass
+            # 没有钱包地址，使用空数据
+            state["wallet_assets"] = []
+            state["total_value_usd"] = 0
 
-        # APY 排序：按 supply_apy 降序
-        protocols = defi_data["lending_protocols"]
-        sorted_protocols = dict(
-            sorted(protocols.items(), key=lambda x: x[1].get("supply_apy", 0), reverse=True)
-        )
-        defi_data["lending_protocols"] = sorted_protocols
-
-        # 标记小协议
-        for _name, info in defi_data["lending_protocols"].items():
-            info["is_small_protocol"] = info.get("tvl", 0) < SMALL_PROTOCOL_TVL_THRESHOLD
-
-        defi_data["last_updated"] = datetime.now().isoformat()
-
-        state["defi_data"] = defi_data
-        return state
-
-    async def aggregate_risk_data(self, state: Dict) -> Dict:
-        """
-        聚合风险数据
-
-        Args:
-            state: 全局状态
-
-        Returns:
-            更新后的state，包含risk_data字段
-        """
-        if self.use_mock:
-            risk_data = generate_mock_risk()
-        else:
-            risk_data = {
-                "blacklist_addresses": set(),
-                "risky_tokens": {},
-                "phishing_patterns": [],
-                "protocol_audits": {},
-                "last_updated": None,
-            }
-            if self.blockchain_service:
-                # TODO: 对接真实区块链服务
-                pass
-
-        # 黑名单地址格式校验
-        validated_blacklist = set()
-        for addr in risk_data.get("blacklist_addresses", set()):
-            if isinstance(addr, str) and 32 <= len(addr) <= 44:
-                validated_blacklist.add(addr)
-        risk_data["blacklist_addresses"] = validated_blacklist
-
-        risk_data["last_updated"] = datetime.now().isoformat()
-
-        state["risk_data"] = risk_data
-        return state
-
-    async def validate_data(self, data: Dict) -> bool:
-        """
-        验证数据完整性和准确性
-
-        Args:
-            data: 待验证的数据
-
-        Returns:
-            是否通过验证
-        """
-        # 检查是否为钱包数据（有 address + balances 字段）
-        if "address" in data and "balances" in data:
-            required_wallet_fields = [
-                "address",
-                "balances",
-                "nfts",
-                "lp_positions",
-                "lending_positions",
-                "authorizations",
-                "total_value_usd",
-                "last_updated",
-            ]
-            for field in required_wallet_fields:
-                if field not in data:
-                    return False
-
-            # 数值合理性检查：余额 >= 0
-            for _mint, info in data.get("balances", {}).items():
-                if info.get("amount", 0) < 0:
-                    return False
-
-            return True
-
-        # 检查是否为 DeFi 数据（有 lending_protocols 字段）
-        if "lending_protocols" in data:
-            for _name, info in data.get("lending_protocols", {}).items():
-                supply_apy = info.get("supply_apy", 0)
-                if supply_apy < 0 or supply_apy > 500:
-                    return False
-            return True
-
-        # 检查是否为风险数据（有 blacklist_addresses 字段）
-        if "blacklist_addresses" in data:
-            return True
-
-        # 未知数据类型，无法验证
-        return False
-
-    async def __call__(self, state: Dict) -> Dict:
-        """
-        Agent主入口
-        """
-        # 根据任务类型聚合不同的数据
-        task_type = state.get("task_type")
-
-        if task_type == "wallet_analysis":
-            state = await self.aggregate_wallet_data(state)
-        elif task_type == "strategy_generation":
-            state = await self.aggregate_wallet_data(state)
-            state = await self.aggregate_defi_data(state)
-        elif task_type == "risk_check":
-            state = await self.aggregate_wallet_data(state)
-            state = await self.aggregate_risk_data(state)
-        else:
-            # 默认聚合所有数据
-            state = await self.aggregate_wallet_data(state)
-            state = await self.aggregate_defi_data(state)
-            state = await self.aggregate_risk_data(state)
+        try:
+            defi_service = DeFiAggregationService()
+            try:
+                overview = await defi_service.get_overview()
+            finally:
+                await defi_service.close()
+            state["protocol_data"] = overview.get("yields", {}).get("protocols", {})
+            state["market_prices"] = overview.get("prices", {})
+            state["defi_best_opportunities"] = overview.get("yields", {}).get(
+                "best_opportunities",
+                [],
+            )
+        except Exception as e:
+            print(f"[DataAggregationAgent] DeFi 聚合失败，使用 Mock 数据: {e}")
+            state["protocol_data"] = MOCK_PROTOCOL_DATA
 
         state["current_agent"] = self.name
         return state

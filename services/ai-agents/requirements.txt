@@ -29,10 +29,6 @@ python-dotenv==1.0.0
 httpx==0.23.3
 aiohttp==3.13.5
 
-# 测试
-pytest==7.4.3
-pytest-asyncio==0.23.2
-
 # 工具
 python-json-logger==4.1.0
 
