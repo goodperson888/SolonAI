@@ -75,6 +75,12 @@ export const chatApi = {
         data?: Record<string, unknown>
       }) => void
       onSession?: (sessionId: string) => void
+      onRagSources?: (sources: { filename: string }[]) => void
+      onAgentStatus?: (status: {
+        agent: string
+        status: 'running' | 'done'
+        message: string
+      }) => void
       onDone: () => void
       onError: (error: string) => void
     }
@@ -125,6 +131,10 @@ export const chatApi = {
                   callbacks.onData?.(parsed)
                 } else if (eventType === 'session') {
                   callbacks.onSession?.(parsed.session_id)
+                } else if (eventType === 'rag_sources') {
+                  callbacks.onRagSources?.(parsed.sources)
+                } else if (eventType === 'agent_status') {
+                  callbacks.onAgentStatus?.(parsed)
                 } else if (eventType === 'done') {
                   callbacks.onDone()
                 } else if (eventType === 'error') {
@@ -152,6 +162,47 @@ export const chatApi = {
   healthCheck: (): Promise<{ status: string }> => {
     return apiClient.get('/api/v1/chat/health')
   },
+
+  /**
+   * 获取会话列表
+   */
+  getSessions: (walletAddress: string): Promise<SessionItem[]> => {
+    return apiClient.get('/api/v1/chat/sessions', { params: { wallet_address: walletAddress } })
+  },
+
+  /**
+   * 获取会话消息
+   */
+  getMessages: (sessionId: string): Promise<MessageItem[]> => {
+    return apiClient.get(`/api/v1/chat/sessions/${sessionId}/messages`)
+  },
+
+  /**
+   * 删除会话
+   */
+  deleteSession: (
+    sessionId: string,
+    walletAddress: string
+  ): Promise<{ success: boolean; message: string }> => {
+    return apiClient.delete(`/api/v1/chat/sessions/${sessionId}`, {
+      params: { wallet_address: walletAddress },
+    })
+  },
+}
+
+export interface SessionItem {
+  id: string
+  session_id: string
+  title: string
+  created_at: string
+}
+
+export interface MessageItem {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  intent?: string
+  created_at: string
 }
 
 // ===== 资产 API =====

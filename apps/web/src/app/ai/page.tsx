@@ -5,7 +5,11 @@ import { useWallet } from '@solana/wallet-adapter-react'
 import { Button } from '@/components/ui/Button'
 import { MessageBubble } from '@/components/chat/MessageBubble'
 import { chatApi, knowledgeApi, type KnowledgeDocument } from '@/lib/api-client'
-import { Upload, FileText, Trash2, MessageSquare, BookOpen } from 'lucide-react'
+import { Upload, FileText, Trash2, MessageSquare, BookOpen, X } from 'lucide-react'
+
+interface RagSource {
+  filename: string
+}
 
 interface Message {
   id: string
@@ -14,6 +18,12 @@ interface Message {
   timestamp: Date
   intent?: string
   data?: Record<string, unknown>
+  ragSources?: RagSource[]
+  agentStatus?: {
+    agent: string
+    status: 'running' | 'done'
+    message: string
+  }[]
 }
 
 interface Conversation {
@@ -24,20 +34,10 @@ interface Conversation {
   timestamp: string
 }
 
-const INITIAL_CONVERSATION_ID = crypto.randomUUID()
-
 export default function AIAssistantPage() {
   const { connected, publicKey } = useWallet()
-  const [conversations, setConversations] = useState<Conversation[]>([
-    {
-      id: INITIAL_CONVERSATION_ID,
-      title: '新对话',
-      messages: [],
-      sessionId: '',
-      timestamp: '刚刚',
-    },
-  ])
-  const [activeConversationId, setActiveConversationId] = useState<string>(INITIAL_CONVERSATION_ID)
+  const [conversations, setConversations] = useState<Conversation[]>([])
+  const [activeConversationId, setActiveConversationId] = useState<string>('')
   const [inputMessage, setInputMessage] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [leftPanelMode, setLeftPanelMode] = useState<'conversations' | 'knowledge'>('conversations')
@@ -51,6 +51,87 @@ export default function AIAssistantPage() {
 
   const activeConversation = conversations.find((c) => c.id === activeConversationId)
   const messages = activeConversation?.messages || []
+
+  // 初始化：加载历史会话或创建新对话
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (connected && publicKey) {
+      loadHistorySessions()
+    } else if (conversations.length === 0) {
+      // 未连接钱包时，创建一个本地新对话
+      createNewConversation()
+    }
+  }, [connected, publicKey])
+
+  const createNewConversation = () => {
+    const newConv: Conversation = {
+      id: crypto.randomUUID(),
+      title: '新对话',
+      messages: [],
+      sessionId: '',
+      timestamp: '刚刚',
+    }
+    setConversations((prev) => [newConv, ...prev])
+    setActiveConversationId(newConv.id)
+    activeIdRef.current = newConv.id
+    localStorage.setItem('activeConversationId', newConv.id)
+  }
+
+  const loadHistorySessions = async () => {
+    if (!publicKey) return
+    try {
+      const sessions = await chatApi.getSessions(publicKey.toBase58())
+      if (sessions && sessions.length > 0) {
+        const historyConvs: Conversation[] = sessions.map((s) => ({
+          id: s.session_id,
+          title: s.title || '未命名对话',
+          messages: [],
+          sessionId: s.session_id,
+          timestamp: new Date(s.created_at).toLocaleDateString('zh-CN'),
+        }))
+        setConversations(historyConvs)
+
+        // 尝试恢复上次的会话，如果不存在则使用第一个
+        const lastActiveId = localStorage.getItem('activeConversationId')
+        const targetId =
+          lastActiveId && historyConvs.find((c) => c.id === lastActiveId)
+            ? lastActiveId
+            : historyConvs[0].id
+
+        setActiveConversationId(targetId)
+        activeIdRef.current = targetId
+
+        // 加载该会话的消息
+        loadConversationMessages(targetId)
+      } else {
+        // 没有历史会话，创建新对话
+        createNewConversation()
+      }
+    } catch {
+      // 加载失败，创建新对话
+      createNewConversation()
+    }
+  }
+
+  const loadConversationMessages = async (sessionId: string) => {
+    try {
+      const msgs = await chatApi.getMessages(sessionId)
+      if (msgs && msgs.length > 0) {
+        const parsed: Message[] = msgs.map((m) => ({
+          id: m.id,
+          role: m.role as 'user' | 'assistant',
+          content: m.content,
+          timestamp: new Date(m.created_at),
+          intent: m.intent,
+        }))
+        setConversations((prev) =>
+          prev.map((conv) => (conv.sessionId === sessionId ? { ...conv, messages: parsed } : conv))
+        )
+      }
+    } catch {
+      // 静默失败
+    }
+  }
 
   // 加载知识库文档
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -110,19 +191,6 @@ export default function AIAssistantPage() {
   }, [messages.length])
 
   // 创建新对话
-  const createNewConversation = () => {
-    const conversationId = crypto.randomUUID()
-    const newConv: Conversation = {
-      id: conversationId,
-      title: '新对话',
-      messages: [],
-      sessionId: '',
-      timestamp: '刚刚',
-    }
-    setConversations((prev) => [newConv, ...prev])
-    setActiveConversationId(conversationId)
-    activeIdRef.current = conversationId
-  }
 
   const handleSend = useCallback(async () => {
     const currentActiveId = activeIdRef.current
@@ -206,6 +274,41 @@ export default function AIAssistantPage() {
               prev.map((conv) => (conv.id === currentActiveId ? { ...conv, sessionId } : conv))
             )
           },
+          onRagSources: (sources) => {
+            setConversations((prev) =>
+              prev.map((conv) => {
+                if (conv.id !== currentActiveId) return conv
+                return {
+                  ...conv,
+                  messages: conv.messages.map((msg) =>
+                    msg.id === aiMessageId ? { ...msg, ragSources: sources } : msg
+                  ),
+                }
+              })
+            )
+          },
+          onAgentStatus: (status) => {
+            // 更新消息的 agentStatus，用于在消息气泡中显示
+            setConversations((prev) =>
+              prev.map((conv) => {
+                if (conv.id !== currentActiveId) return conv
+                return {
+                  ...conv,
+                  messages: conv.messages.map((msg) => {
+                    if (msg.id !== aiMessageId) return msg
+
+                    // 只保留当前正在执行的状态
+                    if (status.status === 'running') {
+                      return { ...msg, agentStatus: [status] }
+                    } else {
+                      // done 状态不显示
+                      return msg
+                    }
+                  }),
+                }
+              })
+            )
+          },
           onData: (result) => {
             // 更新意图和附加数据
             setConversations((prev) =>
@@ -224,9 +327,23 @@ export default function AIAssistantPage() {
           },
           onDone: () => {
             setIsLoading(false)
+            // 清空 agentStatus
+            setConversations((prev) =>
+              prev.map((conv) => {
+                if (conv.id !== currentActiveId) return conv
+                return {
+                  ...conv,
+                  messages: conv.messages.map((msg) =>
+                    msg.id === aiMessageId ? { ...msg, agentStatus: [] } : msg
+                  ),
+                }
+              })
+            )
           },
           onError: (error) => {
             console.error('Stream error:', error)
+            setIsLoading(false)
+            // 清空 agentStatus
             setConversations((prev) =>
               prev.map((conv) => {
                 if (conv.id !== currentActiveId) return conv
@@ -237,13 +354,13 @@ export default function AIAssistantPage() {
                       ? {
                           ...msg,
                           content: msg.content || '抱歉，AI 服务暂时不可用。请确保后端服务已启动。',
+                          agentStatus: [],
                         }
                       : msg
                   ),
                 }
               })
             )
-            setIsLoading(false)
           },
         }
       )
@@ -307,13 +424,18 @@ export default function AIAssistantPage() {
             <div className="flex-1 overflow-y-auto">
               <div className="space-y-1 p-2">
                 {conversations.map((conv) => (
-                  <button
+                  <div
                     key={conv.id}
                     onClick={() => {
                       setActiveConversationId(conv.id)
                       activeIdRef.current = conv.id
+                      localStorage.setItem('activeConversationId', conv.id)
+                      // 如果是历史会话且没有加载过消息，加载一下
+                      if (conv.sessionId && conv.messages.length === 0) {
+                        loadConversationMessages(conv.sessionId)
+                      }
                     }}
-                    className={`w-full rounded-lg p-3 text-left transition-colors ${
+                    className={`group relative cursor-pointer rounded-lg p-3 text-left transition-colors ${
                       activeConversationId === conv.id
                         ? 'border border-indigo-500/50 bg-indigo-600/20'
                         : 'hover:bg-gray-800'
@@ -321,9 +443,37 @@ export default function AIAssistantPage() {
                   >
                     <div className="mb-1 flex items-start justify-between">
                       <h3 className="line-clamp-1 text-sm font-medium text-white">{conv.title}</h3>
-                      <span className="ml-2 flex-shrink-0 text-xs text-gray-500">
-                        {conv.timestamp}
-                      </span>
+                      <div className="ml-2 flex flex-shrink-0 items-center gap-1">
+                        <span className="text-xs text-gray-500">{conv.timestamp}</span>
+                        {conversations.length > 1 && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              // 有 sessionId 的从后端删除
+                              const doDelete =
+                                conv.sessionId && publicKey
+                                  ? chatApi
+                                      .deleteSession(conv.sessionId, publicKey.toBase58())
+                                      .catch(() => {})
+                                  : Promise.resolve()
+                              doDelete.then(() => {
+                                setConversations((prev) => {
+                                  const remaining = prev.filter((c) => c.id !== conv.id)
+                                  // 如果删的是当前对话，切到第一个
+                                  if (activeConversationId === conv.id && remaining.length > 0) {
+                                    setActiveConversationId(remaining[0].id)
+                                    activeIdRef.current = remaining[0].id
+                                  }
+                                  return remaining
+                                })
+                              })
+                            }}
+                            className="hidden rounded p-0.5 text-gray-500 hover:bg-red-500/20 hover:text-red-400 group-hover:block"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                     <p className="mb-1 line-clamp-2 text-xs text-gray-400">
                       {conv.messages.length > 0
@@ -333,7 +483,7 @@ export default function AIAssistantPage() {
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-gray-500">{conv.messages.length} 条消息</span>
                     </div>
-                  </button>
+                  </div>
                 ))}
               </div>
             </div>
@@ -465,21 +615,6 @@ export default function AIAssistantPage() {
             </div>
           ) : (
             messages.map((message) => <MessageBubble key={message.id} message={message} />)
-          )}
-
-          {isLoading && (
-            <div className="flex items-center space-x-2 text-gray-400">
-              <div className="h-2 w-2 animate-bounce rounded-full bg-indigo-400" />
-              <div
-                className="h-2 w-2 animate-bounce rounded-full bg-indigo-400"
-                style={{ animationDelay: '0.1s' }}
-              />
-              <div
-                className="h-2 w-2 animate-bounce rounded-full bg-indigo-400"
-                style={{ animationDelay: '0.2s' }}
-              />
-              <span className="ml-2 text-sm">AI 正在思考...</span>
-            </div>
           )}
           <div ref={messagesEndRef} />
         </div>

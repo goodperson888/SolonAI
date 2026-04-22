@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import Any, Dict
 
 from base_agent import BaseAgent
+from prompts import get_prompt
 
 
 class MonitoringAgent(BaseAgent):
@@ -17,33 +18,11 @@ class MonitoringAgent(BaseAgent):
 
     @property
     def system_prompt(self) -> str:
-        return """你是投资监控专家。负责监控用户策略的执行状态。
+        """从文件加载 system prompt"""
+        return get_prompt("monitoring_agent", language="zh", version="v1")
 
-## 监控维度
-1. 收益跟踪：实际收益 vs 预期收益
-2. 风险变化：协议TVL变化、APY变化
-3. 异常检测：价格剧烈波动、流动性变化
-4. 止盈止损：是否达到用户设定的阈值
-
-## 返回 JSON 格式
-
-```json
-{
-  "status": "normal/warning/critical",
-  "current_value": 5100,
-  "initial_value": 5000,
-  "pnl": 100,
-  "pnl_percentage": 2.0,
-  "alerts": [
-    {
-      "type": "apy_change",
-      "severity": "low",
-      "message": "MarginFi USDC APY从8.2%降至7.5%"
-    }
-  ],
-  "suggestions": ["当前收益正常，建议继续持有"]
-}
-```"""
+    # 原 prompt 已移至 prompts/monitoring_agent_zh_v1.txt
+    # 如需修改 prompt，请编辑该文件
 
     async def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """监控策略状态"""

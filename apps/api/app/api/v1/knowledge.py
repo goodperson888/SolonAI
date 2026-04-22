@@ -245,7 +245,7 @@ async def search_knowledge(
     top_k: int = 5,
     db: AsyncSession = Depends(get_db),
 ):
-    """搜索用户上传的文档内容（基于关键词匹配）"""
+    """搜索用户上传的文档内容（基于关键词匹配 + 智能重排序）"""
     import logging
 
     logger = logging.getLogger(__name__)
@@ -276,33 +276,100 @@ async def search_knowledge(
         if not chunks:
             return {"results": []}
 
-        # 简单的关键词匹配评分
+        # 中文友好的关键词匹配评分
         query_lower = query.lower()
-        query_keywords = set(query_lower.split())
+        import re
 
-        logger.info(f"[知识库搜索] 查询关键词: {query_keywords}")
+        en_keywords = [
+            w
+            for w in query_lower.split()
+            if any(c.isascii() and c.isalpha() for c in w) and len(w) >= 2
+        ]
+        cn_segments = re.findall(r"[\u4e00-\u9fff]+", query_lower)
+        cn_keywords = []
+        for seg in cn_segments:
+            if len(seg) >= 2:
+                cn_keywords.append(seg)  # 完整片段
+            if len(seg) >= 3:
+                cn_keywords.extend(seg[i : i + 3] for i in range(len(seg) - 2))
+        cn_keywords = list(set(cn_keywords))
+        all_keywords = en_keywords + cn_keywords
 
+        logger.info(f"[知识库搜索] 关键词: en={en_keywords}, cn={cn_keywords}")
+
+        # 初步筛选：基于关键词匹配
+        max_possible = sum(len(kw) for kw in all_keywords) if all_keywords else 0
         scored_chunks = []
         for chunk in chunks:
             content_lower = chunk.content.lower()
-            # 计算匹配的关键词数量
-            matches = sum(1 for kw in query_keywords if kw in content_lower)
-            if matches > 0:
-                # 找到对应的文档
+
+            # 计算基础匹配分数
+            base_score = sum(len(kw) for kw in all_keywords if kw in content_lower)
+
+            # 至少匹配 30% 的关键词权重，且最低分 6
+            if base_score >= max(max_possible * 0.3, 6):
+                # 增强评分：考虑多个因素
+                enhanced_score = base_score
+
+                # 1. 完整短语匹配加分（权重 x2）
+                for kw in cn_keywords:
+                    if len(kw) >= 4 and kw in content_lower:
+                        enhanced_score += len(kw) * 2
+
+                # 2. 关键词密度加分
+                keyword_count = sum(content_lower.count(kw) for kw in all_keywords)
+                density_bonus = min(keyword_count * 2, 20)  # 最多加 20 分
+                enhanced_score += density_bonus
+
+                # 3. 关键词位置加分（出现在前 100 字符内）
+                position_bonus = 0
+                for kw in all_keywords:
+                    pos = content_lower.find(kw)
+                    if 0 <= pos < 100:
+                        position_bonus += 5
+                enhanced_score += min(position_bonus, 15)  # 最多加 15 分
+
+                # 4. 文本块长度惩罚（过短或过长都不好）
+                content_len = len(chunk.content)
+                if content_len < 50:
+                    enhanced_score *= 0.5  # 太短，减半
+                elif content_len > 2000:
+                    enhanced_score *= 0.8  # 太长，打 8 折
+
                 doc = next((d for d in docs if d.id == chunk.document_id), None)
-                scored_chunks.append({"chunk": chunk, "doc": doc, "score": matches})
+                scored_chunks.append(
+                    {"chunk": chunk, "doc": doc, "score": enhanced_score, "base_score": base_score}
+                )
 
-        logger.info(f"[知识库搜索] 匹配到 {len(scored_chunks)} 个相关文本块")
+        logger.info(f"[知识库搜索] 初步匹配到 {len(scored_chunks)} 个相关文本块")
 
-        # 按匹配度排序
+        # 按增强分数排序
         scored_chunks.sort(key=lambda x: x["score"], reverse=True)
 
-        # 取 top_k
-        top_chunks = scored_chunks[:top_k]
+        # 取 top_k * 2 进行重排序（如果结果足够多）
+        candidates = scored_chunks[: min(top_k * 2, len(scored_chunks))]
+
+        # 重排序：去重相似内容
+        final_results = []
+        seen_content_hashes = set()
+
+        for item in candidates:
+            chunk = item["chunk"]
+            # 使用内容前 100 字符的哈希去重
+            content_hash = hash(chunk.content[:100])
+
+            if content_hash not in seen_content_hashes:
+                seen_content_hashes.add(content_hash)
+                final_results.append(item)
+
+                if len(final_results) >= top_k:
+                    break
+
+        logger.info(f"[知识库搜索] 重排序后保留 {len(final_results)} 个结果")
 
         # 格式化结果
         results = []
-        for item in top_chunks:
+        for item in final_results:
             chunk = item["chunk"]
             doc = item["doc"]
             results.append(
@@ -318,6 +385,7 @@ async def search_knowledge(
         logger.info(f"[知识库搜索] 返回 {len(results)} 个结果")
         if results:
             logger.info(f"[知识库搜索] 第一个结果预览: {results[0]['content'][:100]}...")
+            logger.info(f"[知识库搜索] 评分分布: {[r['score'] for r in results]}")
 
         return {"results": results}
 

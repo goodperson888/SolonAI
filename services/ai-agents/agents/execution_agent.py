@@ -12,6 +12,7 @@ import json
 from typing import Any, Dict
 
 from base_agent import BaseAgent
+from prompts import get_prompt
 
 
 class ExecutionAgent(BaseAgent):
@@ -20,42 +21,11 @@ class ExecutionAgent(BaseAgent):
 
     @property
     def system_prompt(self) -> str:
-        return """你是 Solana 交易构建专家。负责将投资策略转换为具体的链上交易指令。
+        """从文件加载 system prompt"""
+        return get_prompt("execution_agent", language="zh", version="v1")
 
-## 核心原则
-- 非托管：绝不碰用户私钥
-- 所有交易都需要用户在钱包中签名确认
-- 必须展示交易预览，让用户知道将会发生什么
-
-## 返回 JSON 格式
-
-```json
-{
-  "transaction_id": "tx_001",
-  "type": "deposit/swap/withdraw",
-  "steps": [
-    {
-      "step": 1,
-      "action": "approve",
-      "protocol": "MarginFi",
-      "description": "授权 MarginFi 使用你的 USDC",
-      "estimated_gas": 0.000005
-    },
-    {
-      "step": 2,
-      "action": "deposit",
-      "protocol": "MarginFi",
-      "token": "USDC",
-      "amount": 5000,
-      "description": "存入 5000 USDC 到 MarginFi",
-      "estimated_gas": 0.000005
-    }
-  ],
-  "total_gas": 0.00001,
-  "requires_signature": true,
-  "warnings": ["请确认金额无误后再签名"]
-}
-```"""
+    # 原 prompt 已移至 prompts/execution_agent_zh_v1.txt
+    # 如需修改 prompt，请编辑该文件
 
     async def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """构建交易指令"""
