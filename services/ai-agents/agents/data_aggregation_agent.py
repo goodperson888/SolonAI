@@ -8,7 +8,7 @@ DataAggregationAgent - 数据聚合
 import os
 import sys
 from datetime import datetime
-from typing import Any, Dict
+from typing import Dict
 
 # 添加 blockchain 服务路径
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -19,9 +19,6 @@ from mock.chain_data import (
     generate_mock_defi,
     generate_mock_risk,
     generate_mock_wallet,
-    mock_defi_data,
-    mock_risk_data,
-    mock_wallet_data,
 )
 
 # Mock 模式下的协议数据
@@ -181,7 +178,7 @@ class DataAggregationAgent:
         defi_data["lending_protocols"] = sorted_protocols
 
         # 标记小协议
-        for name, info in defi_data["lending_protocols"].items():
+        for _name, info in defi_data["lending_protocols"].items():
             info["is_small_protocol"] = info.get("tvl", 0) < SMALL_PROTOCOL_TVL_THRESHOLD
 
         defi_data["last_updated"] = datetime.now().isoformat()
@@ -246,7 +243,7 @@ class DataAggregationAgent:
                     return False
 
             # 数值合理性检查：余额 >= 0
-            for mint, info in data.get("balances", {}).items():
+            for _mint, info in data.get("balances", {}).items():
                 if info.get("amount", 0) < 0:
                     return False
 
@@ -254,7 +251,7 @@ class DataAggregationAgent:
 
         # 检查是否为 DeFi 数据（有 lending_protocols 字段）
         if "lending_protocols" in data:
-            for name, info in data.get("lending_protocols", {}).items():
+            for _name, info in data.get("lending_protocols", {}).items():
                 supply_apy = info.get("supply_apy", 0)
                 if supply_apy < 0 or supply_apy > 500:
                     return False

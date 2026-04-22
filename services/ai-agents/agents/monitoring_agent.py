@@ -7,10 +7,9 @@ MonitoringAgent - 持续监控
 """
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Dict, List
 
 from mock.chain_data import mock_strategy_data
-
 
 # 预警触发阈值
 PNL_WARNING_THRESHOLD = -10.0  # PnL 低于 -10% 触发预警
@@ -181,7 +180,7 @@ class MonitoringAgent:
                 })
 
         # 检查 LP 无常损失（简化版：标记所有 LP 仓位供监控）
-        for lp in wallet_data.get("lp_positions", []):
+        for _lp in wallet_data.get("lp_positions", []):
             # TODO: 后续对接真实价格数据计算实际无常损失
             pass
 

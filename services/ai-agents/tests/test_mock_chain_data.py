@@ -3,16 +3,15 @@ TDD: Mock 数据层测试
 验证 mock/chain_data.py 提供的数据结构和生成函数
 """
 
-import pytest
 
 from mock.chain_data import (
-    mock_wallet_data,
+    generate_mock_defi,
+    generate_mock_risk,
+    generate_mock_wallet,
     mock_defi_data,
     mock_risk_data,
     mock_strategy_data,
-    generate_mock_wallet,
-    generate_mock_defi,
-    generate_mock_risk,
+    mock_wallet_data,
 )
 
 
@@ -168,7 +167,7 @@ class TestGenerateMockDefi:
 
     def test_apy_values_are_reasonable(self):
         """APY 值应在合理范围（0-200%）"""
-        for name, info in generate_mock_defi()["lending_protocols"].items():
+        for _name, info in generate_mock_defi()["lending_protocols"].items():
             assert 0 <= info["supply_apy"] <= 200
             assert 0 <= info["borrow_apy"] <= 200
 

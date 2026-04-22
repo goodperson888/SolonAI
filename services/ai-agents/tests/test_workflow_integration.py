@@ -5,7 +5,6 @@ TDD: LangGraph 工作流集成测试
 """
 
 import pytest
-
 from agents.data_aggregation_agent import DataAggregationAgent
 from agents.monitoring_agent import MonitoringAgent
 from mock.chain_data import generate_mock_wallet

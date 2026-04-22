@@ -4,7 +4,6 @@ TDD: DataAggregationAgent 测试
 """
 
 import pytest
-
 from agents.data_aggregation_agent import DataAggregationAgent
 
 
@@ -154,7 +153,7 @@ class TestAggregateRiskData:
     async def test_risky_tokens_have_risk_level(self, agent):
         """高危代币应有 risk_level"""
         result = await agent.aggregate_risk_data({})
-        for mint, info in result["risk_data"]["risky_tokens"].items():
+        for _mint, info in result["risk_data"]["risky_tokens"].items():
             assert "risk_level" in info
 
 

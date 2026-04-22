@@ -4,7 +4,6 @@ TDD: MonitoringAgent 测试
 """
 
 import pytest
-
 from agents.monitoring_agent import MonitoringAgent
 
 
@@ -25,7 +24,7 @@ def agent(data_agg_agent):
 def agent_with_strategy_state(agent):
     """创建包含策略和钱包数据的 state"""
     from agents.data_aggregation_agent import DataAggregationAgent
-    from mock.chain_data import mock_strategy_data, mock_wallet_data
+    from mock.chain_data import mock_wallet_data
 
     data_agg = DataAggregationAgent(llm=None, blockchain_service=None, use_mock=True)
     mon_agent = MonitoringAgent(llm=None, data_aggregation_agent=data_agg, use_mock=True)

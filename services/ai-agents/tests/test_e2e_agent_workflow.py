@@ -10,15 +10,13 @@ E2E Test: Agent 层端到端测试
 3. 收益扫描路径：DataAggregation → Monitoring(opportunity_scan)
 """
 
-from typing import Any, Dict, List, Optional, TypedDict
+from typing import TypedDict
 
 import pytest
-from langgraph.checkpoint.memory import MemorySaver
-from langgraph.graph import END, StateGraph
-
 from agents.data_aggregation_agent import DataAggregationAgent
 from agents.monitoring_agent import MonitoringAgent
-
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph import END, StateGraph
 
 # ===== E2E 专用状态定义 =====
 # DataAggregationAgent / MonitoringAgent 使用的字段与 GraphState 不同
