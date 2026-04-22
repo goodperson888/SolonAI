@@ -41,9 +41,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
                 <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.content}</p>
               ) : (
                 <div className="prose prose-invert prose-sm max-w-none">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {message.content}
-                  </ReactMarkdown>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
                 </div>
               )}
             </div>
