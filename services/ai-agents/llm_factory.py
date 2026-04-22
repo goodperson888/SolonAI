@@ -13,6 +13,7 @@ def create_llm(
     temperature: float = None,
     max_tokens: int = None,
     model: str = None,
+    streaming: bool = True,
 ) -> ChatOpenAI:
     """
     创建大模型实例
@@ -24,6 +25,7 @@ def create_llm(
         temperature: 温度参数，越高越随机
         max_tokens: 最大输出 token 数
         model: 模型名称，不传就用配置文件的
+        streaming: 是否启用流式输出，默认 True
     """
     extra_body = None
     if llm_config.provider.lower() == "minimax":
@@ -35,5 +37,6 @@ def create_llm(
         model_name=model or llm_config.model,
         temperature=temperature if temperature is not None else llm_config.temperature,
         max_tokens=max_tokens or llm_config.max_tokens,
+        streaming=streaming,
         extra_body=extra_body,
     )

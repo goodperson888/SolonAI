@@ -1,15 +1,72 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useTranslation } from '@/hooks/useTranslation'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
+import { useWallet } from '@solana/wallet-adapter-react'
+import { riskApi, type RiskAssessment, type Transaction, type RiskAlert, type Authorization } from '@/lib/api-client'
 
 type TabType = 'overview' | 'authorizations' | 'alerts' | 'transactions'
 
 export default function RiskControlPage() {
   const { t: _t } = useTranslation()
+  const { publicKey } = useWallet()
   const [activeTab, setActiveTab] = useState<TabType>('overview')
+  const [assessment, setAssessment] = useState<RiskAssessment | null>(null)
+  const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [alerts, setAlerts] = useState<RiskAlert[]>([])
+  const [authorizations, setAuthorizations] = useState<Authorization[]>([])
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (publicKey) {
+      loadData()
+    }
+  }, [publicKey, activeTab])
+
+  const loadData = async () => {
+    if (!publicKey) return
+
+    setLoading(true)
+    try {
+      const walletAddress = publicKey.toBase58()
+
+      if (activeTab === 'overview') {
+        const [assessmentData, transactionsData] = await Promise.all([
+          riskApi.assessment(walletAddress),
+          riskApi.transactions(walletAddress, 10),
+        ])
+        setAssessment(assessmentData)
+        setTransactions(transactionsData.transactions || [])
+      } else if (activeTab === 'transactions') {
+        const data = await riskApi.transactions(walletAddress, 50)
+        setTransactions(data.transactions || [])
+      } else if (activeTab === 'alerts') {
+        const data = await riskApi.alerts(walletAddress)
+        setAlerts(data.alerts || [])
+      } else if (activeTab === 'authorizations') {
+        const data = await riskApi.authorizations(walletAddress)
+        setAuthorizations(data.authorizations || [])
+      }
+    } catch (error) {
+      console.error('Failed to load risk data:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleRevokeAuth = async (authId: string) => {
+    if (!publicKey) return
+
+    try {
+      await riskApi.revokeAuth(authId, publicKey.toBase58())
+      // 重新加载授权列表
+      await loadData()
+    } catch (error) {
+      console.error('Failed to revoke authorization:', error)
+    }
+  }
 
   const tabs = [
     { id: 'overview' as TabType, name: '风险概览' },
@@ -17,6 +74,44 @@ export default function RiskControlPage() {
     { id: 'alerts' as TabType, name: '钓鱼检测' },
     { id: 'transactions' as TabType, name: '交易历史' },
   ]
+
+  const getRiskLevelColor = (level: string) => {
+    switch (level.toLowerCase()) {
+      case 'low':
+        return 'text-green-400'
+      case 'medium':
+        return 'text-yellow-400'
+      case 'high':
+      case 'critical':
+        return 'text-red-400'
+      default:
+        return 'text-gray-400'
+    }
+  }
+
+  const getRiskLevelBg = (level: string) => {
+    switch (level.toLowerCase()) {
+      case 'low':
+        return 'bg-green-500/20 text-green-400'
+      case 'medium':
+        return 'bg-yellow-500/20 text-yellow-400'
+      case 'high':
+      case 'critical':
+        return 'bg-red-500/20 text-red-400'
+      default:
+        return 'bg-gray-500/20 text-gray-400'
+    }
+  }
+
+  if (!publicKey) {
+    return (
+      <div className="min-h-screen bg-gray-950 py-8">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="text-center text-gray-400">请先连接钱包</div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gray-950 py-8">
@@ -44,533 +139,266 @@ export default function RiskControlPage() {
           ))}
         </div>
 
+        {loading && <div className="text-center text-gray-400">加载中...</div>}
+
         {/* Tab Content */}
-        {activeTab === 'overview' && (
+        {!loading && activeTab === 'overview' && assessment && (
           <>
             {/* 风险概览 */}
             <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-4">
               <Card className="p-6">
                 <div className="mb-4 flex items-center justify-between">
-                  <h3 className="text-sm font-medium text-gray-400">总风险项</h3>
+                  <h3 className="text-sm font-medium text-gray-400">风险评分</h3>
                   <span className="text-2xl">🔍</span>
                 </div>
-                <p className="text-3xl font-bold text-white">5</p>
+                <p className={`text-3xl font-bold ${getRiskLevelColor(assessment.risk_level)}`}>
+                  {assessment.overall_risk_score}
+                </p>
               </Card>
 
               <Card className="p-6">
                 <div className="mb-4 flex items-center justify-between">
-                  <h3 className="text-sm font-medium text-gray-400">高危风险</h3>
+                  <h3 className="text-sm font-medium text-gray-400">风险等级</h3>
                   <span className="text-2xl">⚠️</span>
                 </div>
-                <p className="text-3xl font-bold text-red-400">1</p>
+                <p className={`text-2xl font-bold capitalize ${getRiskLevelColor(assessment.risk_level)}`}>
+                  {assessment.risk_level}
+                </p>
               </Card>
 
               <Card className="p-6">
                 <div className="mb-4 flex items-center justify-between">
-                  <h3 className="text-sm font-medium text-gray-400">中等风险</h3>
+                  <h3 className="text-sm font-medium text-gray-400">风险因素</h3>
                   <span className="text-2xl">⚡</span>
                 </div>
-                <p className="text-3xl font-bold text-yellow-400">3</p>
+                <p className="text-3xl font-bold text-yellow-400">{assessment.risk_factors.length}</p>
               </Card>
 
               <Card className="p-6">
                 <div className="mb-4 flex items-center justify-between">
-                  <h3 className="text-sm font-medium text-gray-400">低风险</h3>
+                  <h3 className="text-sm font-medium text-gray-400">建议数</h3>
                   <span className="text-2xl">ℹ️</span>
                 </div>
-                <p className="text-3xl font-bold text-blue-400">1</p>
+                <p className="text-3xl font-bold text-blue-400">{assessment.recommendations.length}</p>
               </Card>
             </div>
 
+            {/* 风险因素 */}
+            <Card className="mb-8 p-6">
+              <h2 className="mb-6 text-xl font-bold text-white">风险因素</h2>
+              <div className="space-y-4">
+                {assessment.risk_factors.map((factor, index) => (
+                  <div key={index} className="rounded-lg bg-gray-800 p-4">
+                    <div className="mb-2 flex items-center justify-between">
+                      <h3 className="font-semibold text-white">{factor.factor}</h3>
+                      <span className={`rounded px-2 py-1 text-xs ${getRiskLevelBg(factor.impact)}`}>
+                        {factor.impact}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-400">{factor.description}</p>
+                    <p className="mt-2 text-sm text-gray-500">评分: {factor.score}</p>
+                  </div>
+                ))}
+              </div>
+            </Card>
+
             {/* 实时交易监控 */}
             <Card className="p-6">
-              <h2 className="mb-6 text-xl font-bold text-white">实时交易监控</h2>
-
+              <h2 className="mb-6 text-xl font-bold text-white">最近交易</h2>
               <div className="space-y-4">
-                {/* 监控项1 */}
-                <div className="flex items-center justify-between rounded-lg bg-gray-800 p-4">
-                  <div className="flex items-center gap-4">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-500/20">
-                      <span className="text-2xl">✅</span>
+                {transactions.slice(0, 5).map((tx, index) => (
+                  <div key={index} className="flex items-center justify-between rounded-lg bg-gray-800 p-4">
+                    <div className="flex items-center gap-4">
+                      <div className={`flex h-12 w-12 items-center justify-center rounded-full ${
+                        tx.status === 'success' ? 'bg-green-500/20' : 'bg-red-500/20'
+                      }`}>
+                        <span className="text-2xl">{tx.status === 'success' ? '✅' : '❌'}</span>
+                      </div>
+                      <div>
+                        <p className="font-medium text-white">{tx.type}</p>
+                        <p className="text-sm text-gray-400">
+                          {tx.amount && tx.token ? `${tx.amount} ${tx.token}` : tx.signature?.slice(0, 8)}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-medium text-white">Swap: 10 SOL → 1,850 USDC</p>
-                      <p className="text-sm text-gray-400">通过 Jupiter | 风险评级: 低</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm text-gray-400">5分钟前</p>
-                    <Button variant="ghost" size="sm">
-                      详情
-                    </Button>
-                  </div>
-                </div>
-
-                {/* 监控项2 */}
-                <div className="flex items-center justify-between rounded-lg bg-gray-800 p-4">
-                  <div className="flex items-center gap-4">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-500/20">
-                      <span className="text-2xl">✅</span>
-                    </div>
-                    <div>
-                      <p className="font-medium text-white">存入 MarginFi: 50 SOL</p>
-                      <p className="text-sm text-gray-400">借贷协议 | 风险评级: 低</p>
+                    <div className="text-right">
+                      <p className="text-sm text-gray-400">
+                        {new Date(tx.timestamp).toLocaleString('zh-CN')}
+                      </p>
+                      <span className={`text-xs ${getRiskLevelBg(tx.risk_score ? 'medium' : 'low')}`}>
+                        风险: {tx.risk_score || 'N/A'}
+                      </span>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm text-gray-400">1小时前</p>
-                    <Button variant="ghost" size="sm">
-                      详情
-                    </Button>
-                  </div>
-                </div>
-
-                {/* 监控项3 */}
-                <div className="flex items-center justify-between rounded-lg bg-gray-800 p-4">
-                  <div className="flex items-center gap-4">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-yellow-500/20">
-                      <span className="text-2xl">⚠️</span>
-                    </div>
-                    <div>
-                      <p className="font-medium text-white">授权: Unknown DApp</p>
-                      <p className="text-sm text-yellow-400">未审计合约 | 风险评级: 高</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm text-gray-400">2天前</p>
-                    <Button variant="ghost" size="sm">
-                      详情
-                    </Button>
-                  </div>
-                </div>
+                ))}
               </div>
             </Card>
           </>
         )}
 
-        {activeTab === 'authorizations' && (
+        {!loading && activeTab === 'authorizations' && (
           <Card className="p-6">
             <div className="mb-6 flex items-center justify-between">
               <h2 className="text-xl font-bold text-white">合约授权管理</h2>
-              <Button variant="outline" size="sm">
-                一键撤销过期授权
-              </Button>
             </div>
 
             <div className="space-y-4">
-              {/* 授权项1 - 高危 */}
-              <div className="rounded-lg border-l-4 border-red-500 bg-gray-800 p-4">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="mb-2 flex items-center gap-3">
-                      <h3 className="font-semibold text-white">Unknown DApp</h3>
-                      <span className="rounded bg-red-500 px-2 py-1 text-xs text-white">高危</span>
-                      <span className="rounded bg-gray-700 px-2 py-1 text-xs text-gray-300">
-                        无限授权
-                      </span>
+              {authorizations.length === 0 ? (
+                <div className="text-center text-gray-400">暂无授权记录</div>
+              ) : (
+                authorizations.map((auth) => (
+                  <div
+                    key={auth.id}
+                    className={`rounded-lg border-l-4 bg-gray-800 p-4 ${
+                      auth.risk_level === 'high' ? 'border-red-500' :
+                      auth.risk_level === 'medium' ? 'border-yellow-500' :
+                      'border-green-500'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="mb-2 flex items-center gap-3">
+                          <h3 className="font-semibold text-white">{auth.program_name}</h3>
+                          <span className={`rounded px-2 py-1 text-xs ${getRiskLevelBg(auth.risk_level)}`}>
+                            {auth.risk_level}
+                          </span>
+                        </div>
+                        <p className="mb-2 text-sm text-gray-400">合约: {auth.program_id}</p>
+                        <p className="text-sm text-gray-400">
+                          授权时间: {new Date(auth.granted_at).toLocaleString('zh-CN')}
+                          {auth.last_used && ` | 最后使用: ${new Date(auth.last_used).toLocaleString('zh-CN')}`}
+                        </p>
+                        <p className="mt-2 text-xs text-gray-500">
+                          权限: {auth.permissions.join(', ')}
+                        </p>
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className={auth.risk_level === 'high' ? 'border-red-400 text-red-400' : ''}
+                          onClick={() => handleRevokeAuth(auth.id)}
+                        >
+                          撤销授权
+                        </Button>
+                      </div>
                     </div>
-                    <p className="mb-2 text-sm text-gray-400">合约地址: 7xKXt...9mPq</p>
-                    <p className="text-sm text-yellow-400">⚠️ 该合约未通过审计，存在资产被盗风险</p>
                   </div>
-                  <div className="flex flex-col gap-2">
-                    <Button variant="outline" size="sm" className="border-red-400 text-red-400">
-                      立即撤销
-                    </Button>
-                    <Button variant="ghost" size="sm">
-                      详情
-                    </Button>
-                  </div>
-                </div>
-              </div>
-
-              {/* 授权项2 - 中危 */}
-              <div className="rounded-lg border-l-4 border-yellow-500 bg-gray-800 p-4">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="mb-2 flex items-center gap-3">
-                      <h3 className="font-semibold text-white">Raydium V3</h3>
-                      <span className="rounded bg-yellow-500 px-2 py-1 text-xs text-white">
-                        中危
-                      </span>
-                      <span className="rounded bg-gray-700 px-2 py-1 text-xs text-gray-300">
-                        无限授权
-                      </span>
-                    </div>
-                    <p className="mb-2 text-sm text-gray-400">合约地址: CAMMCzo...5xfM</p>
-                    <p className="text-sm text-gray-400">授权时间: 2024-01-15 | 最后使用: 30天前</p>
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <Button variant="outline" size="sm">
-                      撤销授权
-                    </Button>
-                    <Button variant="ghost" size="sm">
-                      详情
-                    </Button>
-                  </div>
-                </div>
-              </div>
-
-              {/* 授权项3 - 正常 */}
-              <div className="rounded-lg border-l-4 border-green-500 bg-gray-800 p-4">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="mb-2 flex items-center gap-3">
-                      <h3 className="font-semibold text-white">Jupiter Aggregator</h3>
-                      <span className="rounded bg-green-500 px-2 py-1 text-xs text-white">
-                        安全
-                      </span>
-                      <span className="rounded bg-gray-700 px-2 py-1 text-xs text-gray-300">
-                        限额授权
-                      </span>
-                    </div>
-                    <p className="mb-2 text-sm text-gray-400">合约地址: JUP4Fb2...cKzZ</p>
-                    <p className="text-sm text-gray-400">授权额度: 100 USDC | 最后使用: 2小时前</p>
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <Button variant="ghost" size="sm">
-                      管理
-                    </Button>
-                    <Button variant="ghost" size="sm">
-                      详情
-                    </Button>
-                  </div>
-                </div>
-              </div>
+                ))
+              )}
             </div>
           </Card>
         )}
 
-        {activeTab === 'alerts' && (
+        {!loading && activeTab === 'alerts' && (
           <Card className="p-6">
-            <h2 className="mb-6 text-xl font-bold text-white">钓鱼合约检测</h2>
+            <h2 className="mb-6 text-xl font-bold text-white">风险预警</h2>
 
             <div className="space-y-4">
-              {/* 检测记录1 */}
-              <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4">
-                <div className="flex items-start gap-3">
-                  <span className="text-2xl">🚨</span>
-                  <div className="flex-1">
-                    <div className="mb-2 flex items-center justify-between">
-                      <h3 className="font-semibold text-white">拦截钓鱼交易</h3>
-                      <span className="text-sm text-gray-400">2小时前</span>
+              {alerts.length === 0 ? (
+                <div className="text-center text-gray-400">暂无预警</div>
+              ) : (
+                alerts.map((alert) => (
+                  <div
+                    key={alert.id}
+                    className={`rounded-lg border p-4 ${
+                      alert.severity === 'critical' || alert.severity === 'high'
+                        ? 'border-red-500/30 bg-red-500/10'
+                        : 'border-yellow-500/30 bg-yellow-500/10'
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <span className="text-2xl">
+                        {alert.severity === 'critical' || alert.severity === 'high' ? '🚨' : '⚠️'}
+                      </span>
+                      <div className="flex-1">
+                        <div className="mb-2 flex items-center justify-between">
+                          <h3 className="font-semibold text-white">{alert.title}</h3>
+                          <span className="text-sm text-gray-400">
+                            {new Date(alert.created_at).toLocaleString('zh-CN')}
+                          </span>
+                        </div>
+                        <p className="mb-2 text-sm text-gray-300">{alert.description}</p>
+                        <div className="flex items-center gap-2">
+                          <span className={`rounded px-2 py-1 text-xs ${getRiskLevelBg(alert.severity)}`}>
+                            {alert.severity}
+                          </span>
+                          <span className="text-xs text-gray-400">{alert.alert_type}</span>
+                        </div>
+                      </div>
                     </div>
-                    <p className="mb-2 text-sm text-gray-300">
-                      检测到您尝试与已知钓鱼合约交互，已自动拦截
-                    </p>
-                    <p className="font-mono text-xs text-gray-400">合约: ScamXXX...fake</p>
                   </div>
-                </div>
-              </div>
-
-              {/* 检测记录2 */}
-              <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-4">
-                <div className="flex items-start gap-3">
-                  <span className="text-2xl">⚠️</span>
-                  <div className="flex-1">
-                    <div className="mb-2 flex items-center justify-between">
-                      <h3 className="font-semibold text-white">可疑代币警告</h3>
-                      <span className="text-sm text-gray-400">1天前</span>
-                    </div>
-                    <p className="mb-2 text-sm text-gray-300">
-                      检测到您持有的 MEME 代币存在异常交易模式
-                    </p>
-                    <Button variant="outline" size="sm">
-                      查看详情
-                    </Button>
-                  </div>
-                </div>
-              </div>
+                ))
+              )}
             </div>
           </Card>
         )}
 
-        {activeTab === 'transactions' && (
+        {!loading && activeTab === 'transactions' && (
           <>
-            {/* 筛选器 */}
-            <Card className="mb-8 p-6">
-              <div className="flex flex-wrap items-center gap-4">
-                <select className="rounded-lg border border-gray-700 bg-gray-800 px-4 py-2 text-white focus:border-primary-500 focus:outline-none">
-                  <option>全部类型</option>
-                  <option>Swap</option>
-                  <option>转账</option>
-                  <option>DeFi操作</option>
-                  <option>NFT交易</option>
-                </select>
-
-                <select className="rounded-lg border border-gray-700 bg-gray-800 px-4 py-2 text-white focus:border-primary-500 focus:outline-none">
-                  <option>全部状态</option>
-                  <option>成功</option>
-                  <option>失败</option>
-                  <option>待确认</option>
-                </select>
-
-                <select className="rounded-lg border border-gray-700 bg-gray-800 px-4 py-2 text-white focus:border-primary-500 focus:outline-none">
-                  <option>最近7天</option>
-                  <option>最近30天</option>
-                  <option>最近90天</option>
-                  <option>全部时间</option>
-                </select>
-
-                <Button variant="outline" size="sm">
-                  导出CSV
-                </Button>
-              </div>
-            </Card>
-
             {/* 交易列表 */}
             <Card className="overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-gray-800">
                     <tr>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
-                        时间
-                      </th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
-                        类型
-                      </th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
-                        详情
-                      </th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
-                        金额
-                      </th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
-                        状态
-                      </th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
-                        操作
-                      </th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">时间</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">类型</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">详情</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">金额</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">状态</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-800">
-                    {/* 交易1 */}
-                    <tr className="transition-colors hover:bg-gray-800/50">
-                      <td className="px-6 py-4">
-                        <div>
-                          <p className="text-sm text-white">2024-04-15</p>
-                          <p className="text-xs text-gray-400">14:32:18</p>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="rounded-full bg-blue-500/20 px-3 py-1 text-xs text-blue-400">
-                          Swap
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div>
-                          <p className="text-sm text-white">10 SOL → 1,850 USDC</p>
-                          <p className="text-xs text-gray-400">通过 Jupiter</p>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <p className="text-sm text-white">$1,850.00</p>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="rounded-full bg-green-500/20 px-3 py-1 text-xs text-green-400">
-                          成功
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <Button variant="ghost" size="sm">
-                          查看
-                        </Button>
-                      </td>
-                    </tr>
-
-                    {/* 交易2 */}
-                    <tr className="transition-colors hover:bg-gray-800/50">
-                      <td className="px-6 py-4">
-                        <div>
-                          <p className="text-sm text-white">2024-04-15</p>
-                          <p className="text-xs text-gray-400">12:15:42</p>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="rounded-full bg-purple-500/20 px-3 py-1 text-xs text-purple-400">
-                          DeFi
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div>
-                          <p className="text-sm text-white">存入 MarginFi</p>
-                          <p className="text-xs text-gray-400">50 SOL 借贷生息</p>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <p className="text-sm text-white">$9,250.00</p>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="rounded-full bg-green-500/20 px-3 py-1 text-xs text-green-400">
-                          成功
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <Button variant="ghost" size="sm">
-                          查看
-                        </Button>
-                      </td>
-                    </tr>
-
-                    {/* 交易3 */}
-                    <tr className="transition-colors hover:bg-gray-800/50">
-                      <td className="px-6 py-4">
-                        <div>
-                          <p className="text-sm text-white">2024-04-14</p>
-                          <p className="text-xs text-gray-400">18:45:23</p>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="rounded-full bg-green-500/20 px-3 py-1 text-xs text-green-400">
-                          转账
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div>
-                          <p className="text-sm text-white">接收 100 USDC</p>
-                          <p className="text-xs text-gray-400">来自 7xKXt...9mPq</p>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <p className="text-sm text-green-400">+$100.00</p>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="rounded-full bg-green-500/20 px-3 py-1 text-xs text-green-400">
-                          成功
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <Button variant="ghost" size="sm">
-                          查看
-                        </Button>
-                      </td>
-                    </tr>
-
-                    {/* 交易4 */}
-                    <tr className="transition-colors hover:bg-gray-800/50">
-                      <td className="px-6 py-4">
-                        <div>
-                          <p className="text-sm text-white">2024-04-14</p>
-                          <p className="text-xs text-gray-400">16:22:11</p>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="rounded-full bg-purple-500/20 px-3 py-1 text-xs text-purple-400">
-                          DeFi
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div>
-                          <p className="text-sm text-white">添加流动性</p>
-                          <p className="text-xs text-gray-400">SOL-USDC Pool @ Raydium</p>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <p className="text-sm text-white">$5,000.00</p>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="rounded-full bg-green-500/20 px-3 py-1 text-xs text-green-400">
-                          成功
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <Button variant="ghost" size="sm">
-                          查看
-                        </Button>
-                      </td>
-                    </tr>
-
-                    {/* 交易5 - 失败 */}
-                    <tr className="transition-colors hover:bg-gray-800/50">
-                      <td className="px-6 py-4">
-                        <div>
-                          <p className="text-sm text-white">2024-04-13</p>
-                          <p className="text-xs text-gray-400">20:10:55</p>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="rounded-full bg-blue-500/20 px-3 py-1 text-xs text-blue-400">
-                          Swap
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div>
-                          <p className="text-sm text-white">5 SOL → RAY</p>
-                          <p className="text-xs text-gray-400">通过 Raydium</p>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <p className="text-sm text-white">$925.00</p>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="rounded-full bg-red-500/20 px-3 py-1 text-xs text-red-400">
-                          失败
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <Button variant="ghost" size="sm">
-                          查看
-                        </Button>
-                      </td>
-                    </tr>
-
-                    {/* 交易6 */}
-                    <tr className="transition-colors hover:bg-gray-800/50">
-                      <td className="px-6 py-4">
-                        <div>
-                          <p className="text-sm text-white">2024-04-13</p>
-                          <p className="text-xs text-gray-400">15:30:42</p>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="rounded-full bg-yellow-500/20 px-3 py-1 text-xs text-yellow-400">
-                          NFT
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div>
-                          <p className="text-sm text-white">购买 NFT</p>
-                          <p className="text-xs text-gray-400">Mad Lads #1234</p>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <p className="text-sm text-white">15 SOL</p>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="rounded-full bg-green-500/20 px-3 py-1 text-xs text-green-400">
-                          成功
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <Button variant="ghost" size="sm">
-                          查看
-                        </Button>
-                      </td>
-                    </tr>
+                    {transactions.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="px-6 py-8 text-center text-gray-400">
+                          暂无交易记录
+                        </td>
+                      </tr>
+                    ) : (
+                      transactions.map((tx, index) => (
+                        <tr key={index} className="transition-colors hover:bg-gray-800/50">
+                          <td className="px-6 py-4">
+                            <div>
+                              <p className="text-sm text-white">
+                                {new Date(tx.timestamp).toLocaleDateString('zh-CN')}
+                              </p>
+                              <p className="text-xs text-gray-400">
+                                {new Date(tx.timestamp).toLocaleTimeString('zh-CN')}
+                              </p>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="rounded-full bg-blue-500/20 px-3 py-1 text-xs text-blue-400">
+                              {tx.type}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div>
+                              <p className="text-sm text-white">
+                                {tx.from && tx.to ? `${tx.from.slice(0, 6)}...${tx.from.slice(-4)} → ${tx.to.slice(0, 6)}...${tx.to.slice(-4)}` : tx.signature?.slice(0, 16)}
+                              </p>
+                              {tx.token && <p className="text-xs text-gray-400">{tx.token}</p>}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <p className="text-sm text-white">{tx.amount || 'N/A'}</p>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`rounded-full px-3 py-1 text-xs ${
+                              tx.status === 'success' ? 'bg-green-500/20 text-green-400' :
+                              tx.status === 'failed' ? 'bg-red-500/20 text-red-400' :
+                              'bg-yellow-500/20 text-yellow-400'
+                            }`}>
+                              {tx.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
-              </div>
-
-              {/* 分页 */}
-              <div className="flex items-center justify-between border-t border-gray-800 px-6 py-4">
-                <p className="text-sm text-gray-400">显示 1-6 条，共 156 条记录</p>
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" disabled>
-                    上一页
-                  </Button>
-                  <Button variant="outline" size="sm">
-                    1
-                  </Button>
-                  <Button variant="ghost" size="sm">
-                    2
-                  </Button>
-                  <Button variant="ghost" size="sm">
-                    3
-                  </Button>
-                  <Button variant="outline" size="sm">
-                    下一页
-                  </Button>
-                </div>
               </div>
             </Card>
           </>

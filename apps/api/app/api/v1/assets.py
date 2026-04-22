@@ -38,7 +38,9 @@ def get_solana_client_class():
         missing_package = exc.name or "unknown dependency"
         raise HTTPException(
             status_code=503,
-            detail=("区块链资产服务依赖未安装，当前无法查询链上资产。" f" 缺少依赖: {missing_package}"),
+            detail=(
+                "区块链资产服务依赖未安装，当前无法查询链上资产。" f" 缺少依赖: {missing_package}"
+            ),
         ) from exc
 
 

@@ -1,23 +1,69 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { StrategyCard } from '@/components/strategy/StrategyCard'
 import { useTranslation } from '@/hooks/useTranslation'
-import { mockStrategies } from '@/data/mockStrategies'
+import { useWallet } from '@solana/wallet-adapter-react'
+import { strategyApi } from '@/lib/api-client'
 
 export default function StrategyPage() {
   const { t } = useTranslation()
+  const { publicKey } = useWallet()
   const [amount, setAmount] = useState('')
   const [selectedToken, setSelectedToken] = useState('USDC')
   const [riskLevel, setRiskLevel] = useState<'conservative' | 'balanced' | 'aggressive'>('balanced')
   const [duration, setDuration] = useState('30')
+  const [strategies, setStrategies] = useState<any[]>([])
+  const [loading, setLoading] = useState(false)
+  const [generating, setGenerating] = useState(false)
 
-  const handleGenerate = () => {
-    // TODO: 调用后端API生成策略
-    void { amount, selectedToken, riskLevel, duration }
+  useEffect(() => {
+    if (publicKey) {
+      loadStrategies()
+    }
+  }, [publicKey])
+
+  const loadStrategies = async () => {
+    if (!publicKey) return
+
+    setLoading(true)
+    try {
+      const data = await strategyApi.listStrategies(publicKey.toBase58())
+      setStrategies(data.strategies || [])
+    } catch (error) {
+      console.error('Failed to load strategies:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleGenerate = async () => {
+    if (!publicKey || !amount) return
+
+    setGenerating(true)
+    try {
+      const result = await strategyApi.generateStrategy({
+        wallet_address: publicKey.toBase58(),
+        amount: parseFloat(amount),
+        token: selectedToken,
+        risk_level: riskLevel,
+        duration_days: parseInt(duration),
+      })
+
+      // 重新加载策略列表
+      await loadStrategies()
+
+      // 清空表单
+      setAmount('')
+      setDuration('30')
+    } catch (error) {
+      console.error('Failed to generate strategy:', error)
+    } finally {
+      setGenerating(false)
+    }
   }
 
   return (
@@ -121,20 +167,39 @@ export default function StrategyPage() {
           </div>
 
           <div className="mt-6">
-            <Button variant="primary" size="lg" className="w-full" onClick={handleGenerate}>
-              {t('strategy.generateButton')}
+            <Button
+              variant="primary"
+              size="lg"
+              className="w-full"
+              onClick={handleGenerate}
+              disabled={!publicKey || !amount || generating}
+            >
+              {generating ? t('strategy.generating') || '生成中...' : t('strategy.generateButton')}
             </Button>
+            {!publicKey && (
+              <p className="mt-2 text-center text-sm text-yellow-500">
+                请先连接钱包
+              </p>
+            )}
           </div>
         </Card>
 
         {/* Recommended Strategies */}
         <div>
           <h2 className="mb-6 text-2xl font-bold text-white">{t('strategy.recommended')}</h2>
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {mockStrategies.map((strategy) => (
-              <StrategyCard key={strategy.id} {...strategy} />
-            ))}
-          </div>
+          {loading ? (
+            <div className="text-center text-gray-400">加载中...</div>
+          ) : strategies.length > 0 ? (
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {strategies.map((strategy) => (
+                <StrategyCard key={strategy.id} {...strategy} />
+              ))}
+            </div>
+          ) : (
+            <div className="text-center text-gray-400">
+              {publicKey ? '暂无策略，点击上方生成按钮创建策略' : '请先连接钱包'}
+            </div>
+          )}
         </div>
       </div>
     </div>
