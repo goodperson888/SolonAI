@@ -179,9 +179,7 @@ class TestE2ERiskCheckPath:
         # 验证 Monitoring 的持仓风险检查
         assert "risk_alerts" in result
         # Mock 数据包含低健康度借贷仓位，应产生预警
-        lending_alerts = [
-            a for a in result["risk_alerts"] if a["type"] == "lending_risk"
-        ]
+        lending_alerts = [a for a in result["risk_alerts"] if a["type"] == "lending_risk"]
         assert len(lending_alerts) > 0
         # 预警应包含建议
         for alert in lending_alerts:
@@ -202,8 +200,7 @@ class TestE2ERiskCheckPath:
         result = await workflow.ainvoke(initial_state, config=config)
 
         auth_alerts = [
-            a for a in result.get("risk_alerts", [])
-            if a["type"] == "authorization_risk"
+            a for a in result.get("risk_alerts", []) if a["type"] == "authorization_risk"
         ]
         # Mock 数据包含 high risk_level 授权
         assert len(auth_alerts) > 0

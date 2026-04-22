@@ -52,8 +52,16 @@ class TestAggregateWalletData:
         agent, state = agent_with_state
         result = await agent.aggregate_wallet_data(state)
         wallet = result["wallet_data"]
-        required = ["address", "balances", "nfts", "lp_positions",
-                     "lending_positions", "authorizations", "total_value_usd", "last_updated"]
+        required = [
+            "address",
+            "balances",
+            "nfts",
+            "lp_positions",
+            "lending_positions",
+            "authorizations",
+            "total_value_usd",
+            "last_updated",
+        ]
         for field in required:
             assert field in wallet, f"缺少字段: {field}"
 
@@ -78,9 +86,7 @@ class TestAggregateWalletData:
         state = {"wallet_address": "TestAddr"}
         result = await agent.aggregate_wallet_data(state)
         wallet = result["wallet_data"]
-        expected_total = sum(
-            info["usd_value"] for info in wallet["balances"].values()
-        )
+        expected_total = sum(info["usd_value"] for info in wallet["balances"].values())
         assert wallet["total_value_usd"] == expected_total
 
     @pytest.mark.asyncio
@@ -164,6 +170,7 @@ class TestValidateData:
     async def test_valid_wallet_data_passes(self, agent):
         """合法钱包数据应通过验证"""
         from mock.chain_data import mock_wallet_data
+
         assert await agent.validate_data(mock_wallet_data) is True
 
     @pytest.mark.asyncio
@@ -178,8 +185,12 @@ class TestValidateData:
         bad_data = {
             "address": "test",
             "balances": {"token1": {"amount": -1, "usd_value": 100, "token_info": {}}},
-            "nfts": [], "lp_positions": [], "lending_positions": [],
-            "authorizations": [], "total_value_usd": 100, "last_updated": "now",
+            "nfts": [],
+            "lp_positions": [],
+            "lending_positions": [],
+            "authorizations": [],
+            "total_value_usd": 100,
+            "last_updated": "now",
         }
         assert await agent.validate_data(bad_data) is False
 
@@ -188,7 +199,9 @@ class TestValidateData:
         """不合理 APY (>500%) 应验证失败"""
         bad_defi = {
             "lending_protocols": {"Test": {"supply_apy": 600, "borrow_apy": 5, "tvl": 100}},
-            "liquidity_pools": {}, "staking_protocols": {}, "last_updated": "now",
+            "liquidity_pools": {},
+            "staking_protocols": {},
+            "last_updated": "now",
         }
         assert await agent.validate_data(bad_defi) is False
 

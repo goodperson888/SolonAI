@@ -71,8 +71,16 @@ mock_wallet_data: Dict = {
         },
     ],
     "authorizations": [
-        {"program": "Jupiter", "authority": "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4", "risk_level": "low"},
-        {"program": "Unknown DEX", "authority": "UnknownProgram1111111111111111111111111", "risk_level": "high"},
+        {
+            "program": "Jupiter",
+            "authority": "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4",
+            "risk_level": "low",
+        },
+        {
+            "program": "Unknown DEX",
+            "authority": "UnknownProgram1111111111111111111111111",
+            "risk_level": "high",
+        },
     ],
     "total_value_usd": 4375.0,
     "last_updated": datetime.now().isoformat(),
@@ -177,6 +185,7 @@ mock_strategy_data: List[Dict] = [
 # 动态生成函数
 # ============================================================
 
+
 def generate_mock_wallet(
     address: str = "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
     include_low_health: bool = True,
@@ -192,6 +201,7 @@ def generate_mock_wallet(
         钱包数据字典
     """
     import copy
+
     wallet = copy.deepcopy(mock_wallet_data)
     wallet["address"] = address
 
@@ -201,7 +211,12 @@ def generate_mock_wallet(
         ]
         if not wallet["lending_positions"]:
             wallet["lending_positions"] = [
-                {"protocol": "MarginFi", "supplied": {"SOL": 10.0}, "borrowed": {"USDC": 500.0}, "health": 2.5},
+                {
+                    "protocol": "MarginFi",
+                    "supplied": {"SOL": 10.0},
+                    "borrowed": {"USDC": 500.0},
+                    "health": 2.5,
+                },
             ]
     return wallet
 
@@ -217,6 +232,7 @@ def generate_mock_defi(num_protocols: Optional[int] = None) -> Dict:
         DeFi 数据字典
     """
     import copy
+
     defi = copy.deepcopy(mock_defi_data)
 
     if num_protocols is not None:
@@ -237,6 +253,7 @@ def generate_mock_risk(num_blacklist: Optional[int] = None) -> Dict:
         风险数据字典
     """
     import copy
+
     risk = copy.deepcopy(mock_risk_data)
 
     if num_blacklist is not None:

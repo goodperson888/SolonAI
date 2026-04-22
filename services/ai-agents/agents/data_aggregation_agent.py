@@ -135,11 +135,13 @@ class DataAggregationAgent:
                 symbol = info.get("token_info", {}).get("symbol", mint[:8])
                 # 简单异常检测逻辑：SOL 价格应在合理范围
                 if symbol == "SOL" and (price_per_unit < 50 or price_per_unit > 500):
-                    anomaly_detection.append({
-                        "type": "price_anomaly",
-                        "token": symbol,
-                        "message": f"{symbol} 价格异常: ${price_per_unit:.2f}",
-                    })
+                    anomaly_detection.append(
+                        {
+                            "type": "price_anomaly",
+                            "token": symbol,
+                            "message": f"{symbol} 价格异常: ${price_per_unit:.2f}",
+                        }
+                    )
 
         wallet_data["anomaly_detection"] = anomaly_detection
         wallet_data["last_updated"] = datetime.now().isoformat()
@@ -235,8 +237,14 @@ class DataAggregationAgent:
         # 检查是否为钱包数据（有 address + balances 字段）
         if "address" in data and "balances" in data:
             required_wallet_fields = [
-                "address", "balances", "nfts", "lp_positions",
-                "lending_positions", "authorizations", "total_value_usd", "last_updated",
+                "address",
+                "balances",
+                "nfts",
+                "lp_positions",
+                "lending_positions",
+                "authorizations",
+                "total_value_usd",
+                "last_updated",
             ]
             for field in required_wallet_fields:
                 if field not in data:

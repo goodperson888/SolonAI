@@ -13,8 +13,8 @@ from mock.chain_data import mock_strategy_data
 
 # 预警触发阈值
 PNL_WARNING_THRESHOLD = -10.0  # PnL 低于 -10% 触发预警
-STOP_LOSS_THRESHOLD = -15.0    # PnL 低于 -15% 触发止损
-APY_DRIFT_THRESHOLD = 0.5      # APY 偏移超过 50% 触发预警
+STOP_LOSS_THRESHOLD = -15.0  # PnL 低于 -15% 触发止损
+APY_DRIFT_THRESHOLD = 0.5  # APY 偏移超过 50% 触发预警
 
 
 class MonitoringAgent:
@@ -91,11 +91,13 @@ class MonitoringAgent:
         # 止损检测
         if pnl_pct <= STOP_LOSS_THRESHOLD:
             if not any(a.get("type") == "stop_loss" for a in alerts):
-                alerts.append({
-                    "type": "stop_loss",
-                    "severity": "critical",
-                    "message": f"触发止损线，当前亏损 {pnl_pct:.1f}%",
-                })
+                alerts.append(
+                    {
+                        "type": "stop_loss",
+                        "severity": "critical",
+                        "message": f"触发止损线，当前亏损 {pnl_pct:.1f}%",
+                    }
+                )
                 suggestions.append("建议立即平仓或减仓止损")
 
         # APY 偏移检测
@@ -103,20 +105,24 @@ class MonitoringAgent:
             apy_drift = abs(actual_apy - expected_apy) / expected_apy
             if apy_drift > APY_DRIFT_THRESHOLD:
                 if not any(a.get("type") == "apy_drift" for a in alerts):
-                    alerts.append({
-                        "type": "apy_drift",
-                        "severity": "warning",
-                        "message": f"实际 APY ({actual_apy:.1f}%) 严重偏离预期 ({expected_apy:.1f}%)",
-                    })
+                    alerts.append(
+                        {
+                            "type": "apy_drift",
+                            "severity": "warning",
+                            "message": f"实际 APY ({actual_apy:.1f}%) 严重偏离预期 ({expected_apy:.1f}%)",
+                        }
+                    )
 
         # PnL 预警检测
         if pnl_pct <= PNL_WARNING_THRESHOLD and pnl_pct > STOP_LOSS_THRESHOLD:
             if not any(a.get("type") == "pnl_warning" for a in alerts):
-                alerts.append({
-                    "type": "pnl_warning",
-                    "severity": "warning",
-                    "message": f"当前亏损 {pnl_pct:.1f}%，接近止损线",
-                })
+                alerts.append(
+                    {
+                        "type": "pnl_warning",
+                        "severity": "warning",
+                        "message": f"当前亏损 {pnl_pct:.1f}%，接近止损线",
+                    }
+                )
 
         # 确定整体状态
         if any(a.get("severity") == "critical" for a in alerts):
@@ -160,24 +166,28 @@ class MonitoringAgent:
         for position in wallet_data.get("lending_positions", []):
             health_factor = position.get("health", 1.0)
             if health_factor < 1.2:
-                risk_alerts.append({
-                    "type": "lending_risk",
-                    "severity": "critical",
-                    "message": f"借贷健康度过低 ({health_factor:.2f})，有清算风险",
-                    "suggestion": "建议立即补充抵押品或偿还部分借款",
-                    "protocol": position.get("protocol"),
-                })
+                risk_alerts.append(
+                    {
+                        "type": "lending_risk",
+                        "severity": "critical",
+                        "message": f"借贷健康度过低 ({health_factor:.2f})，有清算风险",
+                        "suggestion": "建议立即补充抵押品或偿还部分借款",
+                        "protocol": position.get("protocol"),
+                    }
+                )
 
         # 检查授权风险
         for auth in wallet_data.get("authorizations", []):
             if auth.get("risk_level") == "high":
-                risk_alerts.append({
-                    "type": "authorization_risk",
-                    "severity": "warning",
-                    "message": f"发现高风险授权: {auth.get('program', '未知程序')}",
-                    "suggestion": "建议撤销不必要的授权",
-                    "protocol": auth.get("program"),
-                })
+                risk_alerts.append(
+                    {
+                        "type": "authorization_risk",
+                        "severity": "warning",
+                        "message": f"发现高风险授权: {auth.get('program', '未知程序')}",
+                        "suggestion": "建议撤销不必要的授权",
+                        "protocol": auth.get("program"),
+                    }
+                )
 
         # 检查 LP 无常损失（简化版：标记所有 LP 仓位供监控）
         for _lp in wallet_data.get("lp_positions", []):
@@ -229,13 +239,15 @@ class MonitoringAgent:
 
                 # 如果当前 APY 低于最优 APY 超过 0.5%，建议调仓
                 if current_apy > 0 and best_apy > current_apy + 0.5:
-                    opportunities.append({
-                        "type": "better_apy",
-                        "description": f"{current_protocol} APY {current_apy:.1f}% -> {best_name} APY {best_apy:.1f}%",
-                        "from_protocol": current_protocol,
-                        "to_protocol": best_name,
-                        "apy_improvement": best_apy - current_apy,
-                    })
+                    opportunities.append(
+                        {
+                            "type": "better_apy",
+                            "description": f"{current_protocol} APY {current_apy:.1f}% -> {best_name} APY {best_apy:.1f}%",
+                            "from_protocol": current_protocol,
+                            "to_protocol": best_name,
+                            "apy_improvement": best_apy - current_apy,
+                        }
+                    )
 
         # 如果没有钱包数据但有 DeFi 数据，生成通用建议
         if not current_positions and lending_protocols:
@@ -244,11 +256,13 @@ class MonitoringAgent:
                 key=lambda x: x[1].get("supply_apy", 0),
             )
             best_name, best_info = best_protocol
-            opportunities.append({
-                "type": "new_deposit",
-                "description": f"推荐存入 {best_name}，APY {best_info.get('supply_apy', 0):.1f}%",
-                "to_protocol": best_name,
-            })
+            opportunities.append(
+                {
+                    "type": "new_deposit",
+                    "description": f"推荐存入 {best_name}，APY {best_info.get('supply_apy', 0):.1f}%",
+                    "to_protocol": best_name,
+                }
+            )
 
         state["opportunities"] = opportunities
         return state
@@ -286,10 +300,10 @@ class MonitoringAgent:
                     content=f"""
 请将以下预警信息翻译成大白话，让普通用户能看懂：
 
-预警类型: {alert.get('type')}
-严重程度: {alert.get('severity')}
-详细信息: {alert.get('message')}
-建议操作: {alert.get('suggestion')}
+预警类型: {alert.get("type")}
+严重程度: {alert.get("severity")}
+详细信息: {alert.get("message")}
+建议操作: {alert.get("suggestion")}
 
 要求：
 1. 用简单易懂的语言

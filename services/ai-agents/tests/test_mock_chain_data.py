@@ -3,7 +3,6 @@ TDD: Mock 数据层测试
 验证 mock/chain_data.py 提供的数据结构和生成函数
 """
 
-
 from mock.chain_data import (
     generate_mock_defi,
     generate_mock_risk,
@@ -20,8 +19,16 @@ class TestMockWalletData:
 
     def test_has_required_top_level_fields(self):
         """mock_wallet_data 应包含所有顶层字段"""
-        required = ["address", "balances", "nfts", "lp_positions",
-                     "lending_positions", "authorizations", "total_value_usd", "last_updated"]
+        required = [
+            "address",
+            "balances",
+            "nfts",
+            "lp_positions",
+            "lending_positions",
+            "authorizations",
+            "total_value_usd",
+            "last_updated",
+        ]
         for field in required:
             assert field in mock_wallet_data, f"缺少字段: {field}"
 
@@ -92,7 +99,13 @@ class TestMockRiskData:
 
     def test_has_required_top_level_fields(self):
         """mock_risk_data 应包含所有顶层字段"""
-        required = ["blacklist_addresses", "risky_tokens", "phishing_patterns", "protocol_audits", "last_updated"]
+        required = [
+            "blacklist_addresses",
+            "risky_tokens",
+            "phishing_patterns",
+            "protocol_audits",
+            "last_updated",
+        ]
         for field in required:
             assert field in mock_risk_data, f"缺少字段: {field}"
 
@@ -128,8 +141,16 @@ class TestMockStrategyData:
 
     def test_strategy_has_required_fields(self):
         """每个策略应有必需字段"""
-        required = ["strategy_id", "status", "current_value", "initial_value",
-                     "pnl", "pnl_percentage", "expected_apy", "actual_apy"]
+        required = [
+            "strategy_id",
+            "status",
+            "current_value",
+            "initial_value",
+            "pnl",
+            "pnl_percentage",
+            "expected_apy",
+            "actual_apy",
+        ]
         for strategy in mock_strategy_data:
             for field in required:
                 assert field in strategy, f"策略缺少字段: {field}"

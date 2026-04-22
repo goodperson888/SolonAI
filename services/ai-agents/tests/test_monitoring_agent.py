@@ -11,6 +11,7 @@ from agents.monitoring_agent import MonitoringAgent
 def data_agg_agent():
     """创建 Mock 模式的 DataAggregationAgent"""
     from agents.data_aggregation_agent import DataAggregationAgent
+
     return DataAggregationAgent(llm=None, blockchain_service=None, use_mock=True)
 
 
@@ -68,9 +69,19 @@ class TestMonitorStrategy:
         agent, state = agent_with_strategy_state
         result = await agent.monitor_strategy(state)
         mr = result["monitoring_result"]
-        required = ["strategy_id", "status", "current_value", "initial_value",
-                     "pnl", "pnl_percentage", "expected_apy", "actual_apy",
-                     "alerts", "suggestions", "last_checked"]
+        required = [
+            "strategy_id",
+            "status",
+            "current_value",
+            "initial_value",
+            "pnl",
+            "pnl_percentage",
+            "expected_apy",
+            "actual_apy",
+            "alerts",
+            "suggestions",
+            "last_checked",
+        ]
         for field in required:
             assert field in mr, f"缺少字段: {field}"
 
@@ -127,6 +138,7 @@ class TestCheckPositionRisk:
     async def test_detects_low_health_factor(self, agent):
         """应检测低健康因子借贷仓位"""
         from mock.chain_data import generate_mock_wallet
+
         wallet_data = generate_mock_wallet(include_low_health=True)
         state = {"wallet_data": wallet_data}
         result = await agent.check_position_risk(state)
@@ -138,11 +150,13 @@ class TestCheckPositionRisk:
     async def test_critical_severity_for_very_low_health(self, agent):
         """健康因子 < 1.2 应标记为 critical"""
         from mock.chain_data import generate_mock_wallet
+
         wallet_data = generate_mock_wallet(include_low_health=True)
         state = {"wallet_data": wallet_data}
         result = await agent.check_position_risk(state)
         critical_alerts = [
-            a for a in result["risk_alerts"]
+            a
+            for a in result["risk_alerts"]
             if a["type"] == "lending_risk" and a["severity"] == "critical"
         ]
         assert len(critical_alerts) > 0
@@ -151,6 +165,7 @@ class TestCheckPositionRisk:
     async def test_no_alerts_for_healthy_positions(self, agent):
         """健康仓位不应产生借贷预警"""
         from mock.chain_data import generate_mock_wallet
+
         wallet_data = generate_mock_wallet(include_low_health=False)
         state = {"wallet_data": wallet_data}
         result = await agent.check_position_risk(state)
@@ -161,6 +176,7 @@ class TestCheckPositionRisk:
     async def test_detects_high_risk_authorizations(self, agent):
         """应检测高风险授权"""
         from mock.chain_data import mock_wallet_data
+
         state = {"wallet_data": mock_wallet_data}
         result = await agent.check_position_risk(state)
         auth_alerts = [a for a in result["risk_alerts"] if a["type"] == "authorization_risk"]
@@ -277,6 +293,7 @@ class TestCallRouting:
     async def test_position_check_task(self, agent):
         """task_type=position_check 应执行持仓风险检查"""
         from mock.chain_data import generate_mock_wallet
+
         state = {
             "wallet_address": "TestAddr",
             "wallet_data": generate_mock_wallet(include_low_health=True),
