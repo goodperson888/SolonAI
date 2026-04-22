@@ -9,7 +9,6 @@ from typing import Any, Dict, List, Optional, TypedDict
 
 from pydantic import BaseModel, Field
 
-
 # ===== LangGraph 工作流使用的 TypedDict 状态 =====
 
 
@@ -84,7 +83,9 @@ class AgentState(BaseModel):
     user_input: str = ""  # 用户原始输入
     wallet_address: str = ""  # 用户钱包地址
     session_id: str = ""  # 会话ID
-    chat_history: List[Dict[str, str]] = Field(default_factory=list)  # 对话历史 [{"role": "user/assistant", "content": "..."}]
+    chat_history: List[Dict[str, str]] = Field(
+        default_factory=list
+    )  # 对话历史 [{"role": "user/assistant", "content": "..."}]
 
     # ===== IntentAgent 输出 =====
     intent: str = ""  # 识别的意图: query_assets, generate_strategy, execute_trade, risk_check, chat

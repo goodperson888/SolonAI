@@ -1,14 +1,16 @@
 """知识库数据模型"""
-from datetime import datetime
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Enum
-from sqlalchemy.orm import relationship
+
 import enum
+from datetime import datetime
 
 from app.core.database import Base
+from sqlalchemy import Column, DateTime, Enum, ForeignKey, Integer, String, Text
+from sqlalchemy.orm import relationship
 
 
 class DocumentType(str, enum.Enum):
     """文档类型枚举"""
+
     PDF = "pdf"
     DOC = "doc"
     DOCX = "docx"
@@ -18,6 +20,7 @@ class DocumentType(str, enum.Enum):
 
 class KnowledgeDocument(Base):
     """知识文档模型"""
+
     __tablename__ = "knowledge_documents"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -37,6 +40,7 @@ class KnowledgeDocument(Base):
 
 class KnowledgeChunk(Base):
     """知识片段模型（文档的文本分块）"""
+
     __tablename__ = "knowledge_chunks"
 
     id = Column(Integer, primary_key=True, index=True)

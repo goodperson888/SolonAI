@@ -9,7 +9,6 @@ import os
 import shutil
 import sys
 from pathlib import Path
-from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy import delete, desc, select
@@ -46,6 +45,7 @@ def _get_document_parser():
     """懒加载 DocumentParser，避免启动时依赖缺失"""
     try:
         from rag.document_parser import DocumentParser
+
         return DocumentParser
     except ImportError as exc:
         raise HTTPException(
@@ -64,6 +64,7 @@ async def upload_document(
 ):
     """上传文档到知识库"""
     import logging
+
     logger = logging.getLogger(__name__)
 
     logger.info(f"[知识库上传] 开始处理，文件: {file.filename}, 钱包: {wallet_address}")
@@ -120,7 +121,7 @@ async def upload_document(
         logger.info(f"[知识库上传] 文档记录已创建，ID: {db_doc.id}")
 
         # 解析文档并分块
-        logger.info(f"[知识库上传] 开始解析文档...")
+        logger.info("[知识库上传] 开始解析文档...")
         text = DocumentParser.parse(str(file_path))
         logger.info(f"[知识库上传] 文档解析完成，文本长度: {len(text)}")
 
@@ -139,12 +140,12 @@ async def upload_document(
         await db.commit()
         await db.refresh(db_doc)
 
-        logger.info(f"[知识库上传] 文本块已保存到数据库")
+        logger.info("[知识库上传] 文本块已保存到数据库")
 
         # 向量化后删除原始文件以节省空间
         if file_path.exists():
             file_path.unlink()
-            logger.info(f"[知识库上传] 原始文件已删除")
+            logger.info("[知识库上传] 原始文件已删除")
 
         return {
             "document": {
@@ -229,9 +230,7 @@ async def delete_document(
             file_path.unlink()
 
     # 删除 chunks
-    await db.execute(
-        delete(KnowledgeChunk).where(KnowledgeChunk.document_id == document_id)
-    )
+    await db.execute(delete(KnowledgeChunk).where(KnowledgeChunk.document_id == document_id))
     # 删除文档记录
     await db.delete(doc)
     await db.commit()
@@ -248,6 +247,7 @@ async def search_knowledge(
 ):
     """搜索用户上传的文档内容（基于关键词匹配）"""
     import logging
+
     logger = logging.getLogger(__name__)
 
     try:
@@ -255,9 +255,7 @@ async def search_knowledge(
 
         # 查询用户的所有文档
         doc_result = await db.execute(
-            select(KnowledgeDocument).where(
-                KnowledgeDocument.user_id == wallet_address
-            )
+            select(KnowledgeDocument).where(KnowledgeDocument.user_id == wallet_address)
         )
         docs = doc_result.scalars().all()
 
@@ -269,9 +267,7 @@ async def search_knowledge(
         # 获取所有文档的文本块
         doc_ids = [doc.id for doc in docs]
         chunk_result = await db.execute(
-            select(KnowledgeChunk).where(
-                KnowledgeChunk.document_id.in_(doc_ids)
-            )
+            select(KnowledgeChunk).where(KnowledgeChunk.document_id.in_(doc_ids))
         )
         chunks = chunk_result.scalars().all()
 
@@ -294,11 +290,7 @@ async def search_knowledge(
             if matches > 0:
                 # 找到对应的文档
                 doc = next((d for d in docs if d.id == chunk.document_id), None)
-                scored_chunks.append({
-                    "chunk": chunk,
-                    "doc": doc,
-                    "score": matches
-                })
+                scored_chunks.append({"chunk": chunk, "doc": doc, "score": matches})
 
         logger.info(f"[知识库搜索] 匹配到 {len(scored_chunks)} 个相关文本块")
 
@@ -313,13 +305,15 @@ async def search_knowledge(
         for item in top_chunks:
             chunk = item["chunk"]
             doc = item["doc"]
-            results.append({
-                "chunk_id": str(chunk.id),
-                "document_id": str(doc.id) if doc else "",
-                "filename": doc.filename if doc else "未知文档",
-                "content": chunk.content,
-                "score": item["score"],
-            })
+            results.append(
+                {
+                    "chunk_id": str(chunk.id),
+                    "document_id": str(doc.id) if doc else "",
+                    "filename": doc.filename if doc else "未知文档",
+                    "content": chunk.content,
+                    "score": item["score"],
+                }
+            )
 
         logger.info(f"[知识库搜索] 返回 {len(results)} 个结果")
         if results:
@@ -350,9 +344,7 @@ async def get_knowledge_stats(
         doc_types[doc_type] = doc_types.get(doc_type, 0) + 1
 
     chunk_count_result = await db.execute(
-        select(KnowledgeChunk).where(
-            KnowledgeChunk.document_id.in_([doc.id for doc in docs])
-        )
+        select(KnowledgeChunk).where(KnowledgeChunk.document_id.in_([doc.id for doc in docs]))
     )
     chunks = chunk_count_result.scalars().all()
 

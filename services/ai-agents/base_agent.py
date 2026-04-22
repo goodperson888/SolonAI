@@ -10,9 +10,8 @@ import re
 from abc import ABC, abstractmethod
 from typing import Any, Dict
 
+from error_handler import ErrorSeverity, LLMError, error_handler, llm_circuit_breaker
 from langchain_openai import ChatOpenAI
-
-from error_handler import AgentError, ErrorSeverity, LLMError, error_handler, llm_circuit_breaker
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +101,7 @@ class BaseAgent(ABC):
             raise LLMError(
                 "LLM 服务暂时不可用，请稍后重试",
                 severity=ErrorSeverity.HIGH,
-                details={"circuit_breaker": "open"}
+                details={"circuit_breaker": "open"},
             )
 
         try:
@@ -129,10 +128,12 @@ class BaseAgent(ABC):
             raise LLMError(
                 f"LLM 调用失败: {str(e)}",
                 severity=ErrorSeverity.MEDIUM,
-                details={"agent": self.name, "error": str(e)}
+                details={"agent": self.name, "error": str(e)},
             )
 
-    async def call_llm_with_metadata(self, user_input: str, chat_history: list = None) -> Dict[str, str]:
+    async def call_llm_with_metadata(
+        self, user_input: str, chat_history: list = None
+    ) -> Dict[str, str]:
         """调用大模型并返回文本和推理过程（带熔断器保护）"""
         from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
@@ -141,7 +142,7 @@ class BaseAgent(ABC):
             raise LLMError(
                 "LLM 服务暂时不可用，请稍后重试",
                 severity=ErrorSeverity.HIGH,
-                details={"circuit_breaker": "open"}
+                details={"circuit_breaker": "open"},
             )
 
         try:
@@ -166,7 +167,7 @@ class BaseAgent(ABC):
             raise LLMError(
                 f"LLM 调用失败: {str(e)}",
                 severity=ErrorSeverity.MEDIUM,
-                details={"agent": self.name, "error": str(e)}
+                details={"agent": self.name, "error": str(e)},
             )
 
     async def call_llm_stream(self, user_input: str, chat_history: list = None):
@@ -187,7 +188,7 @@ class BaseAgent(ABC):
             raise LLMError(
                 "LLM 服务暂时不可用，请稍后重试",
                 severity=ErrorSeverity.HIGH,
-                details={"circuit_breaker": "open"}
+                details={"circuit_breaker": "open"},
             )
 
         try:
@@ -202,7 +203,7 @@ class BaseAgent(ABC):
 
             # 使用 astream 进行流式调用
             async for chunk in self.llm.astream(messages):
-                if hasattr(chunk, 'content') and chunk.content:
+                if hasattr(chunk, "content") and chunk.content:
                     yield chunk.content
 
             # 记录成功
@@ -215,7 +216,7 @@ class BaseAgent(ABC):
             raise LLMError(
                 f"LLM 流式调用失败: {str(e)}",
                 severity=ErrorSeverity.MEDIUM,
-                details={"agent": self.name, "error": str(e)}
+                details={"agent": self.name, "error": str(e)},
             )
 
     async def call_llm_json(self, user_input: str, chat_history: list = None) -> Dict[str, Any]:

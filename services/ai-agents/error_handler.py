@@ -22,7 +22,12 @@ class ErrorSeverity(Enum):
 class AgentError(Exception):
     """Agent 错误基类"""
 
-    def __init__(self, message: str, severity: ErrorSeverity = ErrorSeverity.MEDIUM, details: Optional[Dict] = None):
+    def __init__(
+        self,
+        message: str,
+        severity: ErrorSeverity = ErrorSeverity.MEDIUM,
+        details: Optional[Dict] = None,
+    ):
         self.message = message
         self.severity = severity
         self.details = details or {}
@@ -72,15 +77,17 @@ class ErrorHandler:
 
             except AgentError as e:
                 last_error = e
-                print(f"[ErrorHandler] {error_context} 失败 (尝试 {attempt + 1}/{self.max_retries}): {e.message}")
+                print(
+                    f"[ErrorHandler] {error_context} 失败 (尝试 {attempt + 1}/{self.max_retries}): {e.message}"
+                )
 
                 # 根据严重程度决定是否重试
                 if e.severity == ErrorSeverity.CRITICAL:
-                    print(f"[ErrorHandler] 致命错误，停止重试")
+                    print("[ErrorHandler] 致命错误，停止重试")
                     break
 
                 if e.severity == ErrorSeverity.LOW:
-                    print(f"[ErrorHandler] 轻微错误，继续执行")
+                    print("[ErrorHandler] 轻微错误，继续执行")
                     return True, None, None
 
                 # 中等和严重错误，等待后重试
@@ -89,7 +96,9 @@ class ErrorHandler:
 
             except Exception as e:
                 last_error = e
-                print(f"[ErrorHandler] {error_context} 未知错误 (尝试 {attempt + 1}/{self.max_retries}): {str(e)}")
+                print(
+                    f"[ErrorHandler] {error_context} 未知错误 (尝试 {attempt + 1}/{self.max_retries}): {str(e)}"
+                )
                 traceback.print_exc()
 
                 if attempt < self.max_retries - 1:
@@ -126,7 +135,9 @@ class ErrorHandler:
 
         return decorator
 
-    def _create_fallback_state(self, state: Dict[str, Any], agent_name: str, error: str) -> Dict[str, Any]:
+    def _create_fallback_state(
+        self, state: Dict[str, Any], agent_name: str, error: str
+    ) -> Dict[str, Any]:
         """创建降级状态"""
         state["error"] = True
         state["error_agent"] = agent_name
@@ -148,7 +159,9 @@ class ErrorHandler:
 
         elif agent_name == "explanation_agent":
             # 解释失败，返回简单错误提示
-            state["explanation"] = f"抱歉，处理你的请求时遇到了问题：{error}\n\n请稍后重试，或者换个方式问我。"
+            state["explanation"] = (
+                f"抱歉，处理你的请求时遇到了问题：{error}\n\n请稍后重试，或者换个方式问我。"
+            )
             state["reasoning"] = "解释生成失败，返回错误提示"
 
         return state
@@ -189,7 +202,7 @@ class CircuitBreaker:
 
         # 检查是否超过超时时间
         if time.time() - self.last_failure_time > self.timeout:
-            print(f"[CircuitBreaker] 熔断器恢复")
+            print("[CircuitBreaker] 熔断器恢复")
             self.is_open = False
             self.failure_count = 0
             return True

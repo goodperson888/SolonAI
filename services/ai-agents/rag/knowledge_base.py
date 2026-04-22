@@ -13,7 +13,6 @@ Solon AI - RAG 知识库
 import hashlib
 import json
 import logging
-import os
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -45,7 +44,7 @@ class SimpleEmbedding:
 
         # 中文按字拆分，英文按词拆分
         tokens = []
-        for segment in re.split(r"[\s,，。！？：；、（）(){}【】\[\]\"\"''""]+", text.lower()):
+        for segment in re.split(r"[\s,，。！？：；、（）(){}【】\[\]\"\"''" "]+", text.lower()):
             segment = segment.strip()
             if not segment:
                 continue
@@ -233,10 +232,7 @@ class RAGKnowledgeBase:
             faiss.write_index(self.index, str(INDEX_DIR / "knowledge.index"))
 
         # 保存 chunks 元数据
-        meta = [
-            {"content": c.content, "metadata": c.metadata, "id": c.id}
-            for c in self.chunks
-        ]
+        meta = [{"content": c.content, "metadata": c.metadata, "id": c.id} for c in self.chunks]
         with open(INDEX_DIR / "chunks.json", "w", encoding="utf-8") as f:
             json.dump(meta, f, ensure_ascii=False, indent=2)
 
@@ -268,17 +264,14 @@ class RAGKnowledgeBase:
             with open(chunks_file, encoding="utf-8") as f:
                 meta = json.load(f)
             self.chunks = [
-                KnowledgeChunk(content=m["content"], metadata=m["metadata"])
-                for m in meta
+                KnowledgeChunk(content=m["content"], metadata=m["metadata"]) for m in meta
             ]
 
             with open(embed_file, encoding="utf-8") as f:
                 embed_data = json.load(f)
             self.embedding._vocab = embed_data["vocab"]
             self.embedding._idf = (
-                np.array(embed_data["idf"], dtype=np.float32)
-                if embed_data["idf"]
-                else None
+                np.array(embed_data["idf"], dtype=np.float32) if embed_data["idf"] else None
             )
             self.embedding.dim = embed_data["dim"]
 

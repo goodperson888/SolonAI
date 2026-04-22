@@ -1,7 +1,7 @@
 """文档解析器 - 支持多种格式"""
-import os
-from typing import List
+
 from pathlib import Path
+from typing import List
 
 try:
     from pypdf import PdfReader
@@ -42,7 +42,7 @@ class DocumentParser:
     @staticmethod
     def parse_txt(file_path: str) -> str:
         """解析 TXT 文件为文本"""
-        with open(file_path, 'r', encoding='utf-8') as f:
+        with open(file_path, "r", encoding="utf-8") as f:
             return f.read().strip()
 
     @staticmethod
@@ -55,13 +55,13 @@ class DocumentParser:
         """自动检测格式并解析"""
         ext = Path(file_path).suffix.lower()
 
-        if ext == '.pdf':
+        if ext == ".pdf":
             return cls.parse_pdf(file_path)
-        elif ext in ['.doc', '.docx']:
+        elif ext in [".doc", ".docx"]:
             return cls.parse_docx(file_path)
-        elif ext == '.txt':
+        elif ext == ".txt":
             return cls.parse_txt(file_path)
-        elif ext == '.md':
+        elif ext == ".md":
             return cls.parse_md(file_path)
         else:
             raise ValueError(f"不支持的文件格式: {ext}")
@@ -81,12 +81,12 @@ class DocumentParser:
 
             # 尝试在句子边界处断开
             if end < len(text):
-                last_period = chunk.rfind('.')
-                last_newline = chunk.rfind('\n')
+                last_period = chunk.rfind(".")
+                last_newline = chunk.rfind("\n")
                 break_point = max(last_period, last_newline)
 
                 if break_point > chunk_size * 0.5:  # 至少保留 50% 的块
-                    chunk = chunk[:break_point + 1]
+                    chunk = chunk[: break_point + 1]
                     end = start + break_point + 1
 
             chunks.append(chunk.strip())

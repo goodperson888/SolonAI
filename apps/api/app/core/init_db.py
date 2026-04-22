@@ -9,7 +9,7 @@ import os
 
 from app.core.database import Base, engine
 from app.models import ChatMessage, ChatSession, Strategy, Transaction, User  # noqa: F401
-from app.models.knowledge import KnowledgeDocument, KnowledgeChunk  # noqa: F401
+from app.models.knowledge import KnowledgeChunk, KnowledgeDocument  # noqa: F401
 
 
 def should_reset_db() -> bool:

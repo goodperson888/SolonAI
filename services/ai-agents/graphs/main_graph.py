@@ -60,7 +60,6 @@ from agents.monitoring_agent import MonitoringAgent  # noqa: E402
 from agents.risk_agent import RiskAgent  # noqa: E402
 from agents.strategy_agent import StrategyAgent  # noqa: E402
 from agents.validation_agent import ValidationAgent  # noqa: E402
-from error_handler import error_handler  # noqa: E402
 from llm_factory import create_llm  # noqa: E402
 from state import GraphState  # noqa: E402
 
@@ -402,9 +401,7 @@ async def run_agent(
     tid = thread_id or str(uuid.uuid4())
     config = {"configurable": {"thread_id": tid}}
 
-    initial_state = _build_initial_state(
-        user_input, wallet_address, session_id, chat_history
-    )
+    initial_state = _build_initial_state(user_input, wallet_address, session_id, chat_history)
 
     try:
         result = await workflow.ainvoke(initial_state, config=config)
@@ -464,9 +461,7 @@ async def run_agent_stream(
     """
     tid = thread_id or str(uuid.uuid4())
 
-    initial_state = _build_initial_state(
-        user_input, wallet_address, session_id, chat_history
-    )
+    initial_state = _build_initial_state(user_input, wallet_address, session_id, chat_history)
 
     try:
         logger.info(f"[MainGraph] 开始流式执行工作流: thread_id={tid}")
@@ -520,7 +515,7 @@ async def run_agent_stream(
                 "intent_params": state.get("intent_params", {}),
                 "wallet_assets": state.get("wallet_assets", []),
                 "total_value_usd": state.get("total_value_usd", 0),
-            }
+            },
         }
 
         # 流式完成

@@ -42,13 +42,15 @@ def retrieve_user_knowledge(wallet_address: str, query: str, top_k: int = 3) -> 
                     "wallet_address": wallet_address,
                     "query": query,
                     "top_k": top_k,
-                }
+                },
             )
 
             logger.info(f"[UserKnowledge] API 响应状态: {response.status_code}")
 
             if response.status_code != 200:
-                logger.warning(f"[UserKnowledge] API 调用失败: {response.status_code}, {response.text}")
+                logger.warning(
+                    f"[UserKnowledge] API 调用失败: {response.status_code}, {response.text}"
+                )
                 return ""
 
             data = response.json()
@@ -57,7 +59,7 @@ def retrieve_user_knowledge(wallet_address: str, query: str, top_k: int = 3) -> 
             logger.info(f"[UserKnowledge] 找到 {len(results)} 个匹配结果")
 
             if not results:
-                logger.info(f"[UserKnowledge] 未找到匹配内容")
+                logger.info("[UserKnowledge] 未找到匹配内容")
                 return ""
 
             # 格式化结果
@@ -66,7 +68,9 @@ def retrieve_user_knowledge(wallet_address: str, query: str, top_k: int = 3) -> 
                 doc_name = result.get("filename", "未知文档")
                 content = result.get("content", "")
                 score = result.get("score", 0)
-                logger.info(f"[UserKnowledge] 结果 {i+1}: {doc_name}, 评分: {score}, 内容长度: {len(content)}")
+                logger.info(
+                    f"[UserKnowledge] 结果 {i+1}: {doc_name}, 评分: {score}, 内容长度: {len(content)}"
+                )
                 parts.append(f"【{doc_name}】\n{content}\n")
 
             result_text = "\n".join(parts)
