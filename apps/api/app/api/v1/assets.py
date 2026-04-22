@@ -28,17 +28,31 @@ from app.models import User  # noqa: E402
 router = APIRouter()
 
 
-def get_solana_client_class():
-    """Import blockchain dependencies lazily so the whole API can still boot."""
+def get_wallet_service():
+    """Import WalletService lazily so the whole API can still boot."""
     try:
-        from blockchain.solana_client import SolanaClient  # noqa: WPS433, E402
+        from blockchain.services.wallet_service import WalletService  # noqa: WPS433, E402
 
-        return SolanaClient
+        return WalletService()
     except ModuleNotFoundError as exc:
         missing_package = exc.name or "unknown dependency"
         raise HTTPException(
             status_code=503,
             detail=("区块链资产服务依赖未安装，当前无法查询链上资产。" f" 缺少依赖: {missing_package}"),
+        ) from exc
+
+
+def get_transaction_service():
+    """Import TransactionService lazily."""
+    try:
+        from blockchain.services.transaction_service import TransactionService  # noqa: WPS433
+
+        return TransactionService()
+    except ModuleNotFoundError as exc:
+        missing_package = exc.name or "unknown dependency"
+        raise HTTPException(
+            status_code=503,
+            detail=f"区块链交易服务依赖未安装。缺少: {missing_package}",
         ) from exc
 
 
@@ -65,6 +79,28 @@ class WalletAssets(BaseModel):
     sol_value_usd: float  # SOL 价值
     tokens: List[TokenAsset]  # Token 列表
     total_value_usd: float  # 总价值
+
+
+class SwapQuoteRequest(BaseModel):
+    """Swap 报价请求"""
+
+    input_mint: str
+    output_mint: str
+    amount: float  # 人类可读数量
+    slippage_bps: int = 50
+    provider: str = "auto"  # jupiter / raydium / auto
+
+
+class SwapQuoteResponse(BaseModel):
+    """Swap 报价响应"""
+
+    provider: str
+    input_mint: str
+    output_mint: str
+    in_amount: str
+    out_amount: str
+    price_impact_pct: str
+    slippage_bps: int
 
 
 class PnLAnalysis(BaseModel):
@@ -115,36 +151,39 @@ async def get_assets(wallet_address: str, redis=Depends(get_redis)):
         if cached is not None:
             return cached
 
-        # 创建 Solana 客户端
-        SolanaClient = get_solana_client_class()
-        client = SolanaClient()
+        # 使用新的 WalletService 获取资产
+        wallet_service = get_wallet_service()
+        try:
+            portfolio = await wallet_service.get_wallet_portfolio(wallet_address)
+        finally:
+            await wallet_service.close()
 
-        # 获取 SOL 余额
-        sol_balance = await client.get_sol_balance(wallet_address)
+        # 转换为 API 响应格式
+        tokens = [
+            TokenAsset(
+                symbol=t.symbol or "UNKNOWN",
+                name=t.name or t.mint[:8] + "...",
+                mint=t.mint,
+                balance=float(t.balance),
+                price_usd=float(t.usd_value / t.balance) if t.usd_value and t.balance else 0.0,
+                value_usd=float(t.usd_value) if t.usd_value else 0.0,
+            )
+            for t in portfolio.tokens
+        ]
 
-        # 获取 Token 账户（暂时返回空列表，后续实现 Token 解析）
-        await client.get_token_accounts(wallet_address)  # noqa: F841
-
-        # 关闭客户端
-        await client.close()
-
-        # TODO: 接入价格 API 获取实时价格
-        # 暂时使用固定价格
-        sol_price = 178.32
-
-        # 计算价值
-        sol_value = sol_balance * sol_price
-
-        # TODO: 解析 Token 账户数据
-        tokens = []
+        sol_price = 0.0
+        sol_value = 0.0
+        if portfolio.sol_balance.usd_value and portfolio.sol_balance.sol:
+            sol_price = float(portfolio.sol_balance.usd_value / portfolio.sol_balance.sol)
+            sol_value = float(portfolio.sol_balance.usd_value)
 
         response = WalletAssets(
             wallet_address=wallet_address,
-            sol_balance=sol_balance,
+            sol_balance=float(portfolio.sol_balance.sol),
             sol_price_usd=sol_price,
             sol_value_usd=sol_value,
             tokens=tokens,
-            total_value_usd=sol_value,
+            total_value_usd=float(portfolio.total_usd_value),
         )
         await cache_set_json(redis, cache_key, response.model_dump(), settings.CACHE_TTL_ASSETS)
         return response
@@ -197,6 +236,46 @@ async def diagnose_assets(wallet_address: str):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"资产诊断失败: {str(e)}")
+
+
+@router.post("/swap/quote", response_model=SwapQuoteResponse)
+async def get_swap_quote(request: SwapQuoteRequest):
+    """
+    获取 Swap 报价
+
+    聚合 Jupiter + Raydium 获取最优报价
+    """
+    try:
+        tx_service = get_transaction_service()
+        try:
+            # 将人类可读数量转为 lamports/最小单位
+            # 默认假设 9 decimals (SOL)，实际应根据代币 decimals 转换
+            amount_raw = int(request.amount * 1_000_000_000)
+
+            quote = await tx_service.get_swap_quote(
+                input_mint=request.input_mint,
+                output_mint=request.output_mint,
+                amount=amount_raw,
+                slippage_bps=request.slippage_bps,
+                provider=request.provider,
+            )
+        finally:
+            await tx_service.close()
+
+        return SwapQuoteResponse(
+            provider=quote.provider,
+            input_mint=quote.input_mint,
+            output_mint=quote.output_mint,
+            in_amount=str(quote.in_amount),
+            out_amount=str(quote.out_amount),
+            price_impact_pct=str(quote.price_impact_pct or 0),
+            slippage_bps=quote.slippage_bps,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取报价失败: {str(e)}")
 
 
 @router.get("/{wallet_address}/pnl", response_model=PnLAnalysis)
