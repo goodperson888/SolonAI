@@ -20,6 +20,7 @@ export default function StrategyPage() {
   const [loading, setLoading] = useState(false)
   const [generating, setGenerating] = useState(false)
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (publicKey) {
       loadStrategies()
@@ -45,7 +46,7 @@ export default function StrategyPage() {
 
     setGenerating(true)
     try {
-      const result = await strategyApi.generateStrategy({
+      const _result = await strategyApi.generateStrategy({
         wallet_address: publicKey.toBase58(),
         amount: parseFloat(amount),
         token: selectedToken,
@@ -176,11 +177,7 @@ export default function StrategyPage() {
             >
               {generating ? t('strategy.generating') || '生成中...' : t('strategy.generateButton')}
             </Button>
-            {!publicKey && (
-              <p className="mt-2 text-center text-sm text-yellow-500">
-                请先连接钱包
-              </p>
-            )}
+            {!publicKey && <p className="mt-2 text-center text-sm text-yellow-500">请先连接钱包</p>}
           </div>
         </Card>
 

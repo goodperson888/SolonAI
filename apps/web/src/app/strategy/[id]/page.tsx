@@ -4,7 +4,7 @@ import { useParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
-import { ArrowLeft, TrendingUp, AlertTriangle, Clock, CheckCircle } from 'lucide-react'
+import { ArrowLeft, AlertTriangle, Clock, CheckCircle } from 'lucide-react'
 import Link from 'next/link'
 import { useWallet } from '@solana/wallet-adapter-react'
 import { strategyApi, type Strategy } from '@/lib/api-client'
@@ -17,6 +17,7 @@ export default function StrategyDetailPage() {
   const [loading, setLoading] = useState(true)
   const [executing, setExecuting] = useState(false)
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     loadStrategy()
   }, [strategyId])
@@ -99,18 +100,22 @@ export default function StrategyDetailPage() {
             <div>
               <div className="mb-1 text-sm text-gray-400">风险等级</div>
               <div className="flex items-center">
-                <span className={`rounded-full px-3 py-1 text-sm ${
-                  strategy.risk_level === 'conservative' ? 'bg-green-500/20 text-green-400' :
-                  strategy.risk_level === 'balanced' ? 'bg-yellow-500/20 text-yellow-400' :
-                  'bg-red-500/20 text-red-400'
-                }`}>
+                <span
+                  className={`rounded-full px-3 py-1 text-sm ${
+                    strategy.risk_level === 'conservative'
+                      ? 'bg-green-500/20 text-green-400'
+                      : strategy.risk_level === 'balanced'
+                        ? 'bg-yellow-500/20 text-yellow-400'
+                        : 'bg-red-500/20 text-red-400'
+                  }`}
+                >
                   {strategy.risk_tolerance}
                 </span>
               </div>
             </div>
             <div>
               <div className="mb-1 text-sm text-gray-400">状态</div>
-              <div className="text-lg font-semibold text-white capitalize">{strategy.status}</div>
+              <div className="text-lg font-semibold capitalize text-white">{strategy.status}</div>
             </div>
             <div>
               <div className="mb-1 text-sm text-gray-400">创建时间</div>
@@ -161,14 +166,21 @@ export default function StrategyDetailPage() {
                   size="lg"
                   className="w-full"
                   onClick={handleExecute}
-                  disabled={!publicKey || executing || strategy.status === 'executed' || strategy.status === 'completed'}
+                  disabled={
+                    !publicKey ||
+                    executing ||
+                    strategy.status === 'executed' ||
+                    strategy.status === 'completed'
+                  }
                 >
-                  {executing ? '执行中...' : strategy.status === 'executed' || strategy.status === 'completed' ? '已执行' : '一键执行策略'}
+                  {executing
+                    ? '执行中...'
+                    : strategy.status === 'executed' || strategy.status === 'completed'
+                      ? '已执行'
+                      : '一键执行策略'}
                 </Button>
                 {!publicKey && (
-                  <p className="mt-2 text-center text-sm text-yellow-500">
-                    请先连接钱包
-                  </p>
+                  <p className="mt-2 text-center text-sm text-yellow-500">请先连接钱包</p>
                 )}
               </div>
             </Card>
@@ -177,7 +189,7 @@ export default function StrategyDetailPage() {
             <Card className="p-6">
               <h2 className="mb-6 text-xl font-bold text-white">策略详情</h2>
               <div className="prose prose-invert max-w-none">
-                <p className="text-gray-300 whitespace-pre-wrap">{strategy.strategy_content}</p>
+                <p className="whitespace-pre-wrap text-gray-300">{strategy.strategy_content}</p>
               </div>
             </Card>
 
@@ -226,7 +238,9 @@ export default function StrategyDetailPage() {
               <div className="space-y-4">
                 <div>
                   <div className="mb-1 text-sm text-gray-400">风险等级</div>
-                  <div className="text-xl font-bold text-white capitalize">{strategy.risk_level}</div>
+                  <div className="text-xl font-bold capitalize text-white">
+                    {strategy.risk_level}
+                  </div>
                 </div>
                 <div>
                   <div className="mb-1 text-sm text-gray-400">预期收益</div>
@@ -236,12 +250,17 @@ export default function StrategyDetailPage() {
                 </div>
                 <div>
                   <div className="mb-1 text-sm text-gray-400">状态</div>
-                  <div className={`text-xl font-bold capitalize ${
-                    strategy.status === 'completed' ? 'text-green-400' :
-                    strategy.status === 'executed' ? 'text-blue-400' :
-                    strategy.status === 'active' ? 'text-yellow-400' :
-                    'text-gray-400'
-                  }`}>
+                  <div
+                    className={`text-xl font-bold capitalize ${
+                      strategy.status === 'completed'
+                        ? 'text-green-400'
+                        : strategy.status === 'executed'
+                          ? 'text-blue-400'
+                          : strategy.status === 'active'
+                            ? 'text-yellow-400'
+                            : 'text-gray-400'
+                    }`}
+                  >
                     {strategy.status}
                   </div>
                 </div>
@@ -264,7 +283,7 @@ export default function StrategyDetailPage() {
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-gray-400">风险承受度</span>
-                  <span className="text-sm text-white capitalize">{strategy.risk_tolerance}</span>
+                  <span className="text-sm capitalize text-white">{strategy.risk_tolerance}</span>
                 </div>
               </div>
             </Card>

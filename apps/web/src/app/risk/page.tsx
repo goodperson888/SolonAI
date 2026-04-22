@@ -5,7 +5,13 @@ import { useTranslation } from '@/hooks/useTranslation'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { useWallet } from '@solana/wallet-adapter-react'
-import { riskApi, type RiskAssessment, type Transaction, type RiskAlert, type Authorization } from '@/lib/api-client'
+import {
+  riskApi,
+  type RiskAssessment,
+  type Transaction,
+  type RiskAlert,
+  type Authorization,
+} from '@/lib/api-client'
 
 type TabType = 'overview' | 'authorizations' | 'alerts' | 'transactions'
 
@@ -161,7 +167,9 @@ export default function RiskControlPage() {
                   <h3 className="text-sm font-medium text-gray-400">风险等级</h3>
                   <span className="text-2xl">⚠️</span>
                 </div>
-                <p className={`text-2xl font-bold capitalize ${getRiskLevelColor(assessment.risk_level)}`}>
+                <p
+                  className={`text-2xl font-bold capitalize ${getRiskLevelColor(assessment.risk_level)}`}
+                >
                   {assessment.risk_level}
                 </p>
               </Card>
@@ -171,7 +179,9 @@ export default function RiskControlPage() {
                   <h3 className="text-sm font-medium text-gray-400">风险因素</h3>
                   <span className="text-2xl">⚡</span>
                 </div>
-                <p className="text-3xl font-bold text-yellow-400">{assessment.risk_factors.length}</p>
+                <p className="text-3xl font-bold text-yellow-400">
+                  {assessment.risk_factors.length}
+                </p>
               </Card>
 
               <Card className="p-6">
@@ -179,7 +189,9 @@ export default function RiskControlPage() {
                   <h3 className="text-sm font-medium text-gray-400">建议数</h3>
                   <span className="text-2xl">ℹ️</span>
                 </div>
-                <p className="text-3xl font-bold text-blue-400">{assessment.recommendations.length}</p>
+                <p className="text-3xl font-bold text-blue-400">
+                  {assessment.recommendations.length}
+                </p>
               </Card>
             </div>
 
@@ -191,7 +203,9 @@ export default function RiskControlPage() {
                   <div key={index} className="rounded-lg bg-gray-800 p-4">
                     <div className="mb-2 flex items-center justify-between">
                       <h3 className="font-semibold text-white">{factor.factor}</h3>
-                      <span className={`rounded px-2 py-1 text-xs ${getRiskLevelBg(factor.impact)}`}>
+                      <span
+                        className={`rounded px-2 py-1 text-xs ${getRiskLevelBg(factor.impact)}`}
+                      >
                         {factor.impact}
                       </span>
                     </div>
@@ -207,17 +221,24 @@ export default function RiskControlPage() {
               <h2 className="mb-6 text-xl font-bold text-white">最近交易</h2>
               <div className="space-y-4">
                 {transactions.slice(0, 5).map((tx, index) => (
-                  <div key={index} className="flex items-center justify-between rounded-lg bg-gray-800 p-4">
+                  <div
+                    key={index}
+                    className="flex items-center justify-between rounded-lg bg-gray-800 p-4"
+                  >
                     <div className="flex items-center gap-4">
-                      <div className={`flex h-12 w-12 items-center justify-center rounded-full ${
-                        tx.status === 'success' ? 'bg-green-500/20' : 'bg-red-500/20'
-                      }`}>
+                      <div
+                        className={`flex h-12 w-12 items-center justify-center rounded-full ${
+                          tx.status === 'success' ? 'bg-green-500/20' : 'bg-red-500/20'
+                        }`}
+                      >
                         <span className="text-2xl">{tx.status === 'success' ? '✅' : '❌'}</span>
                       </div>
                       <div>
                         <p className="font-medium text-white">{tx.type}</p>
                         <p className="text-sm text-gray-400">
-                          {tx.amount && tx.token ? `${tx.amount} ${tx.token}` : tx.signature?.slice(0, 8)}
+                          {tx.amount && tx.token
+                            ? `${tx.amount} ${tx.token}`
+                            : tx.signature?.slice(0, 8)}
                         </p>
                       </div>
                     </div>
@@ -225,7 +246,9 @@ export default function RiskControlPage() {
                       <p className="text-sm text-gray-400">
                         {new Date(tx.timestamp).toLocaleString('zh-CN')}
                       </p>
-                      <span className={`text-xs ${getRiskLevelBg(tx.risk_score ? 'medium' : 'low')}`}>
+                      <span
+                        className={`text-xs ${getRiskLevelBg(tx.risk_score ? 'medium' : 'low')}`}
+                      >
                         风险: {tx.risk_score || 'N/A'}
                       </span>
                     </div>
@@ -250,23 +273,28 @@ export default function RiskControlPage() {
                   <div
                     key={auth.id}
                     className={`rounded-lg border-l-4 bg-gray-800 p-4 ${
-                      auth.risk_level === 'high' ? 'border-red-500' :
-                      auth.risk_level === 'medium' ? 'border-yellow-500' :
-                      'border-green-500'
+                      auth.risk_level === 'high'
+                        ? 'border-red-500'
+                        : auth.risk_level === 'medium'
+                          ? 'border-yellow-500'
+                          : 'border-green-500'
                     }`}
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="mb-2 flex items-center gap-3">
                           <h3 className="font-semibold text-white">{auth.program_name}</h3>
-                          <span className={`rounded px-2 py-1 text-xs ${getRiskLevelBg(auth.risk_level)}`}>
+                          <span
+                            className={`rounded px-2 py-1 text-xs ${getRiskLevelBg(auth.risk_level)}`}
+                          >
                             {auth.risk_level}
                           </span>
                         </div>
                         <p className="mb-2 text-sm text-gray-400">合约: {auth.program_id}</p>
                         <p className="text-sm text-gray-400">
                           授权时间: {new Date(auth.granted_at).toLocaleString('zh-CN')}
-                          {auth.last_used && ` | 最后使用: ${new Date(auth.last_used).toLocaleString('zh-CN')}`}
+                          {auth.last_used &&
+                            ` | 最后使用: ${new Date(auth.last_used).toLocaleString('zh-CN')}`}
                         </p>
                         <p className="mt-2 text-xs text-gray-500">
                           权限: {auth.permissions.join(', ')}
@@ -276,7 +304,9 @@ export default function RiskControlPage() {
                         <Button
                           variant="outline"
                           size="sm"
-                          className={auth.risk_level === 'high' ? 'border-red-400 text-red-400' : ''}
+                          className={
+                            auth.risk_level === 'high' ? 'border-red-400 text-red-400' : ''
+                          }
                           onClick={() => handleRevokeAuth(auth.id)}
                         >
                           撤销授权
@@ -320,7 +350,9 @@ export default function RiskControlPage() {
                         </div>
                         <p className="mb-2 text-sm text-gray-300">{alert.description}</p>
                         <div className="flex items-center gap-2">
-                          <span className={`rounded px-2 py-1 text-xs ${getRiskLevelBg(alert.severity)}`}>
+                          <span
+                            className={`rounded px-2 py-1 text-xs ${getRiskLevelBg(alert.severity)}`}
+                          >
                             {alert.severity}
                           </span>
                           <span className="text-xs text-gray-400">{alert.alert_type}</span>
@@ -342,11 +374,21 @@ export default function RiskControlPage() {
                 <table className="w-full">
                   <thead className="bg-gray-800">
                     <tr>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">时间</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">类型</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">详情</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">金额</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">状态</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
+                        时间
+                      </th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
+                        类型
+                      </th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
+                        详情
+                      </th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
+                        金额
+                      </th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
+                        状态
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-800">
@@ -377,7 +419,9 @@ export default function RiskControlPage() {
                           <td className="px-6 py-4">
                             <div>
                               <p className="text-sm text-white">
-                                {tx.from && tx.to ? `${tx.from.slice(0, 6)}...${tx.from.slice(-4)} → ${tx.to.slice(0, 6)}...${tx.to.slice(-4)}` : tx.signature?.slice(0, 16)}
+                                {tx.from && tx.to
+                                  ? `${tx.from.slice(0, 6)}...${tx.from.slice(-4)} → ${tx.to.slice(0, 6)}...${tx.to.slice(-4)}`
+                                  : tx.signature?.slice(0, 16)}
                               </p>
                               {tx.token && <p className="text-xs text-gray-400">{tx.token}</p>}
                             </div>
@@ -386,11 +430,15 @@ export default function RiskControlPage() {
                             <p className="text-sm text-white">{tx.amount || 'N/A'}</p>
                           </td>
                           <td className="px-6 py-4">
-                            <span className={`rounded-full px-3 py-1 text-xs ${
-                              tx.status === 'success' ? 'bg-green-500/20 text-green-400' :
-                              tx.status === 'failed' ? 'bg-red-500/20 text-red-400' :
-                              'bg-yellow-500/20 text-yellow-400'
-                            }`}>
+                            <span
+                              className={`rounded-full px-3 py-1 text-xs ${
+                                tx.status === 'success'
+                                  ? 'bg-green-500/20 text-green-400'
+                                  : tx.status === 'failed'
+                                    ? 'bg-red-500/20 text-red-400'
+                                    : 'bg-yellow-500/20 text-yellow-400'
+                              }`}
+                            >
                               {tx.status}
                             </span>
                           </td>

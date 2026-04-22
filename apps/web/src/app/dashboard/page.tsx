@@ -10,7 +10,12 @@ import { Button } from '@/components/ui/Button'
 import { useTranslation } from '@/hooks/useTranslation'
 import { mockAssets, mockPortfolioStats } from '@/data/mockAssets'
 import { mockStrategies } from '@/data/mockStrategies'
-import { assetsApi, WalletAssetsResponse, AssetDiagnosisResponse, PnLResponse } from '@/lib/api-client'
+import {
+  assetsApi,
+  WalletAssetsResponse,
+  AssetDiagnosisResponse,
+  PnLResponse,
+} from '@/lib/api-client'
 
 type TabType = 'overview' | 'profit' | 'risk'
 
@@ -275,9 +280,11 @@ export default function DashboardPage() {
                   <h3 className="text-lg font-semibold text-white">总盈亏</h3>
                   <span className="text-2xl">📊</span>
                 </div>
-                <p className={`mb-2 text-3xl font-bold ${
-                  pnl && pnl.total_pnl >= 0 ? 'text-green-400' : 'text-red-400'
-                }`}>
+                <p
+                  className={`mb-2 text-3xl font-bold ${
+                    pnl && pnl.total_pnl >= 0 ? 'text-green-400' : 'text-red-400'
+                  }`}
+                >
                   {pnl ? `${pnl.total_pnl >= 0 ? '+' : ''}$${pnl.total_pnl.toFixed(2)}` : '+$0.00'}
                 </p>
                 <p className="text-sm text-gray-400">
@@ -290,10 +297,14 @@ export default function DashboardPage() {
                   <h3 className="text-lg font-semibold text-white">持仓盈亏</h3>
                   <span className="text-2xl">💎</span>
                 </div>
-                <p className={`mb-2 text-3xl font-bold ${
-                  pnl && pnl.unrealized_pnl >= 0 ? 'text-green-400' : 'text-red-400'
-                }`}>
-                  {pnl ? `${pnl.unrealized_pnl >= 0 ? '+' : ''}$${pnl.unrealized_pnl.toFixed(2)}` : '+$0.00'}
+                <p
+                  className={`mb-2 text-3xl font-bold ${
+                    pnl && pnl.unrealized_pnl >= 0 ? 'text-green-400' : 'text-red-400'
+                  }`}
+                >
+                  {pnl
+                    ? `${pnl.unrealized_pnl >= 0 ? '+' : ''}$${pnl.unrealized_pnl.toFixed(2)}`
+                    : '+$0.00'}
                 </p>
                 <p className="text-sm text-gray-400">浮动盈亏</p>
               </Card>
@@ -303,10 +314,14 @@ export default function DashboardPage() {
                   <h3 className="text-lg font-semibold text-white">已实现盈亏</h3>
                   <span className="text-2xl">🌾</span>
                 </div>
-                <p className={`mb-2 text-3xl font-bold ${
-                  pnl && pnl.realized_pnl >= 0 ? 'text-green-400' : 'text-red-400'
-                }`}>
-                  {pnl ? `${pnl.realized_pnl >= 0 ? '+' : ''}$${pnl.realized_pnl.toFixed(2)}` : '+$0.00'}
+                <p
+                  className={`mb-2 text-3xl font-bold ${
+                    pnl && pnl.realized_pnl >= 0 ? 'text-green-400' : 'text-red-400'
+                  }`}
+                >
+                  {pnl
+                    ? `${pnl.realized_pnl >= 0 ? '+' : ''}$${pnl.realized_pnl.toFixed(2)}`
+                    : '+$0.00'}
                 </p>
                 <p className="text-sm text-gray-400">历史交易</p>
               </Card>
@@ -318,19 +333,25 @@ export default function DashboardPage() {
                 <h2 className="mb-6 text-xl font-bold text-white">盈亏明细</h2>
                 <div className="space-y-4">
                   {pnl.breakdown.map((item, index) => (
-                    <div key={index} className="flex items-center justify-between rounded-lg bg-gray-800 p-4">
+                    <div
+                      key={index}
+                      className="flex items-center justify-between rounded-lg bg-gray-800 p-4"
+                    >
                       <div>
                         <p className="font-medium text-white">{item.asset}</p>
                         <p className="mt-1 text-sm text-gray-400">{item.type}</p>
                       </div>
                       <div className="text-right">
-                        <p className={`text-xl font-bold ${
-                          item.pnl >= 0 ? 'text-green-400' : 'text-red-400'
-                        }`}>
+                        <p
+                          className={`text-xl font-bold ${
+                            item.pnl >= 0 ? 'text-green-400' : 'text-red-400'
+                          }`}
+                        >
                           {item.pnl >= 0 ? '+' : ''}${item.pnl.toFixed(2)}
                         </p>
                         <p className="text-sm text-gray-400">
-                          {item.percentage >= 0 ? '+' : ''}{item.percentage.toFixed(2)}%
+                          {item.percentage >= 0 ? '+' : ''}
+                          {item.percentage.toFixed(2)}%
                         </p>
                       </div>
                     </div>
@@ -356,11 +377,15 @@ export default function DashboardPage() {
                   <h3 className="text-sm font-medium text-gray-400">风险评分</h3>
                   <span className="text-2xl">🔍</span>
                 </div>
-                <p className={`text-3xl font-bold ${
-                  diagnosis?.risk_level === 'low' ? 'text-green-400' :
-                  diagnosis?.risk_level === 'medium' ? 'text-yellow-400' :
-                  'text-red-400'
-                }`}>
+                <p
+                  className={`text-3xl font-bold ${
+                    diagnosis?.risk_level === 'low'
+                      ? 'text-green-400'
+                      : diagnosis?.risk_level === 'medium'
+                        ? 'text-yellow-400'
+                        : 'text-red-400'
+                  }`}
+                >
                   {diagnosis?.risk_score || 'N/A'}
                 </p>
               </Card>
@@ -370,11 +395,15 @@ export default function DashboardPage() {
                   <h3 className="text-sm font-medium text-gray-400">风险等级</h3>
                   <span className="text-2xl">⚠️</span>
                 </div>
-                <p className={`text-2xl font-bold capitalize ${
-                  diagnosis?.risk_level === 'low' ? 'text-green-400' :
-                  diagnosis?.risk_level === 'medium' ? 'text-yellow-400' :
-                  'text-red-400'
-                }`}>
+                <p
+                  className={`text-2xl font-bold capitalize ${
+                    diagnosis?.risk_level === 'low'
+                      ? 'text-green-400'
+                      : diagnosis?.risk_level === 'medium'
+                        ? 'text-yellow-400'
+                        : 'text-red-400'
+                  }`}
+                >
                   {diagnosis?.risk_level || 'N/A'}
                 </p>
               </Card>
@@ -412,22 +441,30 @@ export default function DashboardPage() {
                         issue.severity === 'high' || issue.severity === 'critical'
                           ? 'border-red-500/30 bg-red-500/10'
                           : issue.severity === 'medium'
-                          ? 'border-yellow-500/30 bg-yellow-500/10'
-                          : 'border-green-500/30 bg-green-500/10'
+                            ? 'border-yellow-500/30 bg-yellow-500/10'
+                            : 'border-green-500/30 bg-green-500/10'
                       }`}
                     >
                       <div className="flex items-start gap-3">
                         <span className="text-2xl">
-                          {issue.severity === 'high' || issue.severity === 'critical' ? '⚠️' :
-                           issue.severity === 'medium' ? '⚡' : '✅'}
+                          {issue.severity === 'high' || issue.severity === 'critical'
+                            ? '⚠️'
+                            : issue.severity === 'medium'
+                              ? '⚡'
+                              : '✅'}
                         </span>
                         <div className="flex-1">
                           <div className="mb-2 flex items-center justify-between">
                             <h3 className="font-semibold text-white">{issue.type}</h3>
-                            <span className={`rounded px-2 py-1 text-xs text-white ${
-                              issue.severity === 'high' || issue.severity === 'critical' ? 'bg-red-500' :
-                              issue.severity === 'medium' ? 'bg-yellow-500' : 'bg-green-500'
-                            }`}>
+                            <span
+                              className={`rounded px-2 py-1 text-xs text-white ${
+                                issue.severity === 'high' || issue.severity === 'critical'
+                                  ? 'bg-red-500'
+                                  : issue.severity === 'medium'
+                                    ? 'bg-yellow-500'
+                                    : 'bg-green-500'
+                              }`}
+                            >
                               {issue.severity}
                             </span>
                           </div>

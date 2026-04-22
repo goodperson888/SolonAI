@@ -5,7 +5,7 @@ import { useWallet } from '@solana/wallet-adapter-react'
 import { Button } from '@/components/ui/Button'
 import { MessageBubble } from '@/components/chat/MessageBubble'
 import { chatApi, knowledgeApi, type KnowledgeDocument } from '@/lib/api-client'
-import { Upload, X, FileText, Trash2, MessageSquare, BookOpen } from 'lucide-react'
+import { Upload, FileText, Trash2, MessageSquare, BookOpen } from 'lucide-react'
 
 interface Message {
   id: string
@@ -53,6 +53,7 @@ export default function AIAssistantPage() {
   const messages = activeConversation?.messages || []
 
   // 加载知识库文档
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (connected && publicKey && leftPanelMode === 'knowledge') {
       loadKnowledgeDocs()
@@ -194,9 +195,7 @@ export default function AIAssistantPage() {
                 return {
                   ...conv,
                   messages: conv.messages.map((msg) =>
-                    msg.id === aiMessageId
-                      ? { ...msg, content: msg.content + token }
-                      : msg
+                    msg.id === aiMessageId ? { ...msg, content: msg.content + token } : msg
                   ),
                 }
               })
@@ -204,9 +203,7 @@ export default function AIAssistantPage() {
           },
           onSession: (sessionId) => {
             setConversations((prev) =>
-              prev.map((conv) =>
-                conv.id === currentActiveId ? { ...conv, sessionId } : conv
-              )
+              prev.map((conv) => (conv.id === currentActiveId ? { ...conv, sessionId } : conv))
             )
           },
           onData: (result) => {
@@ -237,7 +234,10 @@ export default function AIAssistantPage() {
                   ...conv,
                   messages: conv.messages.map((msg) =>
                     msg.id === aiMessageId
-                      ? { ...msg, content: msg.content || '抱歉，AI 服务暂时不可用。请确保后端服务已启动。' }
+                      ? {
+                          ...msg,
+                          content: msg.content || '抱歉，AI 服务暂时不可用。请确保后端服务已启动。',
+                        }
                       : msg
                   ),
                 }
@@ -281,7 +281,9 @@ export default function AIAssistantPage() {
               variant={leftPanelMode === 'knowledge' ? 'primary' : 'outline'}
               size="sm"
               className="flex flex-1 items-center justify-center"
-              onClick={() => setLeftPanelMode(leftPanelMode === 'knowledge' ? 'conversations' : 'knowledge')}
+              onClick={() =>
+                setLeftPanelMode(leftPanelMode === 'knowledge' ? 'conversations' : 'knowledge')
+              }
             >
               <BookOpen className="h-4 w-4" />
               <span className="ml-2">{leftPanelMode === 'knowledge' ? '收起' : '知识库'}</span>
@@ -319,7 +321,9 @@ export default function AIAssistantPage() {
                   >
                     <div className="mb-1 flex items-start justify-between">
                       <h3 className="line-clamp-1 text-sm font-medium text-white">{conv.title}</h3>
-                      <span className="ml-2 flex-shrink-0 text-xs text-gray-500">{conv.timestamp}</span>
+                      <span className="ml-2 flex-shrink-0 text-xs text-gray-500">
+                        {conv.timestamp}
+                      </span>
                     </div>
                     <p className="mb-1 line-clamp-2 text-xs text-gray-400">
                       {conv.messages.length > 0
@@ -363,21 +367,15 @@ export default function AIAssistantPage() {
                 <Upload className="h-4 w-4" />
                 <span className="ml-2">{uploading ? '上传中...' : '上传文档'}</span>
               </Button>
-              <p className="mt-2 text-xs text-gray-500">
-                支持 PDF, DOC, DOCX, MD, TXT
-              </p>
+              <p className="mt-2 text-xs text-gray-500">支持 PDF, DOC, DOCX, MD, TXT</p>
             </div>
 
             {/* 知识库：文档列表 */}
             <div className="flex-1 overflow-y-auto p-4">
               {!connected ? (
-                <div className="text-center text-sm text-gray-400">
-                  请先连接钱包
-                </div>
+                <div className="text-center text-sm text-gray-400">请先连接钱包</div>
               ) : knowledgeDocs.length === 0 ? (
-                <div className="text-center text-sm text-gray-400">
-                  暂无文档
-                </div>
+                <div className="text-center text-sm text-gray-400">暂无文档</div>
               ) : (
                 <div className="space-y-2">
                   {knowledgeDocs.map((doc) => (
@@ -386,7 +384,7 @@ export default function AIAssistantPage() {
                       className="rounded-lg border border-gray-800 bg-gray-800/50 p-3"
                     >
                       <div className="mb-2 flex items-start justify-between">
-                        <div className="flex-1 min-w-0">
+                        <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
                             <FileText className="h-4 w-4 flex-shrink-0 text-indigo-400" />
                             <h4 className="truncate text-sm font-medium text-white">

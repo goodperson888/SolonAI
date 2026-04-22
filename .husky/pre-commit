@@ -1,1 +1,44 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# 1. 先运行 lint-staged 自动修复暂存的文件
 npx lint-staged
+
+# 2. 检查前端格式
+echo ""
+echo "🔍 检查前端代码规范..."
+cd apps/web && npx next lint 2>&1
+FRONTEND_EXIT=$?
+cd ../..
+
+if [ $FRONTEND_EXIT -ne 0 ]; then
+  echo ""
+  echo "❌ 前端检查失败，请根据上方错误信息修复后再提交"
+  exit 1
+fi
+
+# 3. 检查后端格式
+echo ""
+echo "🔍 检查后端代码格式..."
+python3 -m ruff format --check apps/api/ services/ 2>&1
+BACKEND_FORMAT_EXIT=$?
+
+if [ $BACKEND_FORMAT_EXIT -ne 0 ]; then
+  echo ""
+  echo "❌ 后端格式检查失败"
+  echo "💡 自动修复: python3 -m ruff format apps/api/ services/"
+  exit 1
+fi
+
+python3 -m ruff check apps/api/ services/ 2>&1
+BACKEND_LINT_EXIT=$?
+
+if [ $BACKEND_LINT_EXIT -ne 0 ]; then
+  echo ""
+  echo "❌ 后端代码规范检查失败"
+  echo "💡 自动修复: python3 -m ruff check --fix apps/api/ services/"
+  exit 1
+fi
+
+echo ""
+echo "✅ 所有检查通过"
