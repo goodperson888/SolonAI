@@ -1,10 +1,14 @@
 # 1. 先运行 lint-staged 自动修复暂存的文件
 npx lint-staged
 
-# 2. 检查前端格式
+# 2. 自动修复前端格式并检查
 echo ""
 echo "🔍 检查前端代码规范..."
-cd apps/web && npx next lint 2>&1
+cd apps/web
+npx prettier --write "src/**/*.{ts,tsx,js,jsx}" --log-level warn 2>&1
+npx eslint --fix "src/**/*.{ts,tsx}" --quiet 2>&1
+git add -u .
+npx next lint 2>&1
 FRONTEND_EXIT=$?
 cd ../..
 
@@ -14,26 +18,20 @@ if [ $FRONTEND_EXIT -ne 0 ]; then
   exit 1
 fi
 
-# 3. 检查后端格式
+# 3. 自动修复后端格式并检查
 echo ""
 echo "🔍 检查后端代码格式..."
-python3 -m ruff format --check apps/api/ services/ 2>&1
-BACKEND_FORMAT_EXIT=$?
+python3 -m ruff format apps/api/ services/ 2>&1
+python3 -m ruff check --fix apps/api/ services/ 2>&1
+git add -u apps/api/ services/
 
-if [ $BACKEND_FORMAT_EXIT -ne 0 ]; then
-  echo ""
-  echo "❌ 后端格式检查失败"
-  echo "💡 自动修复: python3 -m ruff format apps/api/ services/"
-  exit 1
-fi
-
+# 修复后再检查是否还有无法自动修复的问题
 python3 -m ruff check apps/api/ services/ 2>&1
 BACKEND_LINT_EXIT=$?
 
 if [ $BACKEND_LINT_EXIT -ne 0 ]; then
   echo ""
-  echo "❌ 后端代码规范检查失败"
-  echo "💡 自动修复: python3 -m ruff check --fix apps/api/ services/"
+  echo "❌ 后端存在无法自动修复的代码规范问题，请手动修复"
   exit 1
 fi
 
