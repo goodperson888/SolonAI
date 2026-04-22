@@ -56,7 +56,9 @@ def get_run_agent():
         missing_package = exc.name or "unknown dependency"
         raise HTTPException(
             status_code=503,
-            detail=("AI 策略服务依赖未安装，当前无法调用智能体工作流。" f" 缺少依赖: {missing_package}"),
+            detail=(
+                "AI 策略服务依赖未安装，当前无法调用智能体工作流。" f" 缺少依赖: {missing_package}"
+            ),
         ) from exc
 
 
@@ -140,9 +142,7 @@ async def generate_strategy(
             await db.refresh(user)
 
         # 调用 AI Agent 生成策略
-        user_input = (
-            f"我想用 {request.amount} {request.token} 进行 {request.risk_level} 风险等级的投资，帮我生成一个策略"
-        )
+        user_input = f"我想用 {request.amount} {request.token} 进行 {request.risk_level} 风险等级的投资，帮我生成一个策略"
 
         run_agent = get_run_agent()
         agent_result = await run_agent(

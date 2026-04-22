@@ -1,0 +1,154 @@
+[
+  {
+    "content": "Solana 是一条高性能公链，采用 Proof of History (PoH) + Proof of Stake (PoS) 共识机制。出块时间约 400ms，交易确认极快，手续费极低（通常不到 0.01 美元）。原生代币是 SOL，用于支付手续费和质押。生态内有丰富的 DeFi、NFT、GameFi 应用。",
+    "metadata": {
+      "source": "01_solana_basics.md",
+      "title": "什么是 Solana"
+    },
+    "id": "06e69698f303"
+  },
+  {
+    "content": "SOL 是 Solana 的原生代币，主要用途包括：支付交易手续费、质押获取收益（年化约 6-8%）、治理投票。SOL 的最小单位是 lamport，1 SOL = 10^9 lamports。",
+    "metadata": {
+      "source": "01_solana_basics.md",
+      "title": "SOL 代币"
+    },
+    "id": "45cc081a991b"
+  },
+  {
+    "content": "SPL Token 是 Solana 上的代币标准，类似以太坊的 ERC-20。常见代币包括：USDC（Circle 发行的稳定币）、USDT（Tether 稳定币）、JUP（Jupiter 治理代币）、RAY（Raydium 治理代币）、ORCA（Orca 治理代币）。每个代币有唯一的 Mint 地址。转账需要关联代币账户（Associated Token Account）。",
+    "metadata": {
+      "source": "01_solana_basics.md",
+      "title": "SPL Token 标准"
+    },
+    "id": "dc39c161ec65"
+  },
+  {
+    "content": "Solana 上常用的钱包有：Phantom（最流行，支持浏览器扩展和移动端）、Solflare（功能全面）、Backpack（新一代钱包）。钱包的核心是私钥，掌握私钥就掌握了资产控制权。助记词是私钥的人类可读形式，12或24个英文单词。切勿泄露私钥或助记词。",
+    "metadata": {
+      "source": "01_solana_basics.md",
+      "title": "钱包"
+    },
+    "id": "b1f051e2537b"
+  },
+  {
+    "content": "Solana 交易特点：手续费约 0.000005 SOL（不到 0.01 美元），确认时间 1-2 秒。Token 转账需要 SOL 支付手续费，首次转账可能需要创建关联代币账户（约 0.002 SOL）。高峰期可设置优先费（Priority Fee）加速交易。所有交易都需要钱包签名确认。",
+    "metadata": {
+      "source": "01_solana_basics.md",
+      "title": "交易"
+    },
+    "id": "119b573cf674"
+  },
+  {
+    "content": "SOL 质押方式分为：\n1. 原生质押：选择验证者锁定 SOL，APY 约 6-8%，解质押需要等待约 2 天。\n2. 流动性质押（推荐）：质押 SOL 获得流动性质押代币，可继续在 DeFi 中使用。主要有 mSOL（Marinade，APY 约 7%）、JitoSOL（Jito，APY 约 7.5%，含 MEV 收益）、bSOL（BlazeStake，APY 约 7%）。\n3. 流动性质押代币可以继续存入借贷协议或做 LP，实现收益叠加。",
+    "metadata": {
+      "source": "01_solana_basics.md",
+      "title": "SOL 质押"
+    },
+    "id": "7b95caef820b"
+  },
+  {
+    "content": "Jupiter 是 Solana 上最大的 DEX 聚合器，聚合多个 DEX 的流动性找到最优价格。功能包括：即时 Swap（代币兑换）、限价单、DCA 定投、永续合约交易。代币是 JUP。建议滑点设置 0.5%-1%。交易费约 0.3%-0.5% + 极低网络费。大额交易建议分批执行以减少滑点影响。Jupiter API 可编程调用获取报价和构建交易。",
+    "metadata": {
+      "source": "02_defi_protocols.md",
+      "title": "Jupiter DEX 聚合器"
+    },
+    "id": "594ca1057ff0"
+  },
+  {
+    "content": "Raydium 是 Solana 上的 AMM 和流动性协议。提供自动做市商（AMM）交易，支持集中流动性（CLMM）和标准流动性池。流动性提供者（LP）可以赚取交易手续费。代币是 RAY。常见池子有 SOL/USDC、RAY/USDC、SOL/RAY。APY 范围 5%-50%。主要风险是无常损失，建议选择稳定币对降低风险。",
+    "metadata": {
+      "source": "02_defi_protocols.md",
+      "title": "Raydium AMM"
+    },
+    "id": "37bc173ed47e"
+  },
+  {
+    "content": "Orca 是 Solana 上用户友好的 DEX，使用 Whirlpool 集中流动性机制。界面简洁适合新手，支持集中流动性范围设置。代币是 ORCA。优势包括低滑点和 MEV 保护。流动性提供 APY 10%-100%，集中流动性范围越窄收益越高但风险也越高。需要注意范围外流动性不产生收益，需定期调整范围。",
+    "metadata": {
+      "source": "02_defi_protocols.md",
+      "title": "Orca DEX"
+    },
+    "id": "d7d630be0536"
+  },
+  {
+    "content": "MarginFi 是 Solana 上的主要借贷协议。支持存款赚利息和抵押借款。支持的资产包括 SOL、USDC、USDT、mSOL、JitoSOL 等。存款 APY：SOL 约 5-8%，USDC 约 3-6%。借款利率：SOL 约 8-15%，USDC 约 5-10%。健康度（Health Factor）大于 1 表示安全，低于 1 会被清算，清算惩罚约 5-10%。建议保持健康度在 1.5 以上。",
+    "metadata": {
+      "source": "02_defi_protocols.md",
+      "title": "MarginFi 借贷协议"
+    },
+    "id": "9e375afd110c"
+  },
+  {
+    "content": "Kamino 是 Solana 上的自动化 DeFi 协议。提供自动化流动性管理策略，自动调整集中流动性范围。支持借贷（Kamino Lend）和杠杆策略。优势是自动复利，免除手动管理。APY 范围 10%-50%。管理费约 10% 的收益。主要风险包括智能合约风险和无常损失。",
+    "metadata": {
+      "source": "02_defi_protocols.md",
+      "title": "Kamino Finance"
+    },
+    "id": "d50e76efc4a1"
+  },
+  {
+    "content": "Marinade 是 Solana 上最大的流动性质押协议。质押 SOL 获得 mSOL，mSOL 可在 DeFi 中继续使用。原生质押 APY 约 6.5-7%。Marinade Native 无需支付手续费。mSOL 可以作为抵押品在 MarginFi 等借贷协议中使用，实现收益叠加。",
+    "metadata": {
+      "source": "02_defi_protocols.md",
+      "title": "Marinade Finance"
+    },
+    "id": "b5975a35e54b"
+  },
+  {
+    "content": "Jito 是 Solana 上的 MEV 相关质押协议。质押 SOL 获得 JitoSOL，除了基础质押收益外还包含 MEV 收益。APY 约 7-8%，通常高于普通质押。JitoSOL 同样可以在 DeFi 中使用。Jito 还提供区块空间拍卖服务。",
+    "metadata": {
+      "source": "02_defi_protocols.md",
+      "title": "Jito"
+    },
+    "id": "5ecab0536f1e"
+  },
+  {
+    "content": "### 保守策略（APY 3-8%）\n适合资金量大、追求稳定的用户。主要方式包括：稳定币借贷（在 MarginFi 存入 USDC/USDT 赚利息，APY 3-6%）、SOL 流动性质押（mSOL 或 JitoSOL，APY 6-8%）、稳定币对 LP（USDC/USDT LP，几乎无无常损失，APY 3-5%）。优点是风险低、操作简单。缺点是收益相对较低。",
+    "metadata": {
+      "source": "03_strategy_and_risk.md",
+      "title": "投资策略类型"
+    },
+    "id": "61d5c4a38f63"
+  },
+  {
+    "content": "适合有一定 DeFi 经验的用户。主要方式包括：稳定币对 LP 搭配挖矿奖励、SOL 流动性质押 + 借贷组合（质押 SOL 获得 JitoSOL，将 JitoSOL 存入 MarginFi 借出 USDC，再将 USDC 存入另一个池子）、Kamino 自动化策略。需要定期关注仓位和收益变化。",
+    "metadata": {
+      "source": "03_strategy_and_risk.md",
+      "title": "投资策略类型 - 稳健策略（APY 8-20%）"
+    },
+    "id": "2a526e2dd13a"
+  },
+  {
+    "content": "适合经验丰富且能承受高风险的用户。主要方式包括：非稳定币对 LP（如 SOL/USDC 集中流动性）、杠杆策略、新协议早期挖矿。风险高，可能产生较大亏损，包括无常损失、清算风险、智能合约风险。不建议新手尝试。",
+    "metadata": {
+      "source": "03_strategy_and_risk.md",
+      "title": "投资策略类型 - 激进策略（APY 20-100%+）"
+    },
+    "id": "6402228057db"
+  },
+  {
+    "content": "无常损失是做 LP（流动性提供）时，两个代币价格变化不同步导致的潜在损失。举例：投入 1 SOL（价值 100U）+ 100 USDC 做 LP，如果 SOL 价格翻倍到 200U：持有不做 LP 总价值 = 200 + 100 = 300U，LP 取出价值约 283U，无常损失约 5.7%。波动越大无常损失越大。稳定币对几乎没有无常损失。集中流动性范围越窄无常损失影响越大。交易手续费收入通常可以弥补无常损失。",
+    "metadata": {
+      "source": "03_strategy_and_risk.md",
+      "title": "无常损失详解"
+    },
+    "id": "c8afaba7d2af"
+  },
+  {
+    "content": "DeFi 投资的主要风险类型：\n1. 智能合约风险：协议代码可能存在漏洞。优先选择经过多次审计的协议。\n2. 市场风险：代币价格波动导致资产缩水。分散投资，不要全部投入单一资产。\n3. 流动性风险：某些代币流动性不足，大额卖出可能造成较大滑点。\n4. 清算风险：借贷仓位健康度过低会被强制清算。保持健康度在安全线以上。\n5. 协议治理风险：协议规则可能通过治理投票被修改。关注协议的治理动态。",
+    "metadata": {
+      "source": "03_strategy_and_risk.md",
+      "title": "风险评估框架"
+    },
+    "id": "3f89914dd6ce"
+  },
+  {
+    "content": "1. 授权管理：只授权可信协议，定期检查并撤销不必要的授权，使用 Revoke.cash 检查。\n2. 常见骗局：假代币空投（不要交互未知代币）、钓鱼网站（核实 URL）、假客服（官方不会私聊要求转账）。\n3. 资产安全：大额资产使用硬件钱包，不要把所有资产放在同一个钱包，分散投资不要 ALL IN 单一协议。\n4. 操作安全：先小额测试再大额操作，交易前核实地址和金额，不要在公共 WiFi 下操作钱包。",
+    "metadata": {
+      "source": "03_strategy_and_risk.md",
+      "title": "DeFi 安全须知"
+    },
+    "id": "9a6384eb05b5"
+  }
+]

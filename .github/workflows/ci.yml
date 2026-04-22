@@ -76,14 +76,11 @@ jobs:
       - name: Install API dependencies
         run: pip install -r apps/api/requirements.txt
 
-      - name: Black format check
-        run: black --check apps/api/ services/
+      - name: Ruff check
+        run: ruff check apps/api/ services/
 
-      - name: isort check
-        run: isort --check-only apps/api/ services/
-
-      - name: Flake8 lint
-        run: flake8 apps/api/ services/
+      - name: Ruff format check
+        run: ruff format --check apps/api/ services/
 
   # ==========================================
   # Commitlint 检查

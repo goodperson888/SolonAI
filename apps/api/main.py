@@ -1,9 +1,16 @@
-from app.api.v1 import assets, auth, chat, defi, risk, strategy, transactions
+import logging
+
+from app.api.v1 import assets, auth, chat, defi, knowledge, risk, strategy, transactions
 from app.core.config import settings
 from app.core.defi_scheduler import start_defi_scheduler, stop_defi_scheduler
 from app.core.redis import ping_redis, redis_client
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+# 配置日志
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -28,6 +35,7 @@ app.include_router(chat.router, prefix="/api/v1/chat", tags=["AI对话"])
 app.include_router(risk.router, prefix="/api/v1/risk", tags=["风控"])
 app.include_router(transactions.router, prefix="/api/v1/transactions", tags=["交易"])
 app.include_router(defi.router, prefix="/api/v1/defi", tags=["DeFi聚合"])
+app.include_router(knowledge.router, prefix="/api/v1/knowledge", tags=["知识库"])
 
 
 @app.get("/")

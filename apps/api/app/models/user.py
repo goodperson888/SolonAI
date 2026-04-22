@@ -9,9 +9,8 @@ import uuid
 from datetime import datetime, timezone
 
 from app.core.database import Base
-from sqlalchemy import JSON, Column, DateTime
+from sqlalchemy import JSON, Column, DateTime, String, Uuid
 from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import String, Uuid
 
 
 def enum_values(enum_cls):

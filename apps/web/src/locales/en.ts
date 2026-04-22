@@ -73,6 +73,12 @@ export const en = {
     chatPlaceholder: 'Ask me anything about your assets...',
     send: 'Send',
   },
+  chat: {
+    empty: 'Start a conversation with the AI assistant',
+    emptyHint: 'Ask about asset analysis, strategy suggestions, or risk management',
+    placeholder: 'Type your question...',
+    send: 'Send',
+  },
   strategy: {
     title: 'Strategy Center',
     generate: 'Generate Strategy',

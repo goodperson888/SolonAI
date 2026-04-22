@@ -5,6 +5,7 @@ AI 对话 API
 后端接收用户消息 → 调用 AI 智能体 → 返回结果。
 """
 
+import json
 import os
 import sys
 import uuid
@@ -12,6 +13,7 @@ from datetime import datetime
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -51,7 +53,25 @@ def get_run_agent():
         missing_package = exc.name or "unknown dependency"
         raise HTTPException(
             status_code=503,
-            detail=("AI 对话服务依赖未安装，当前无法调用智能体工作流。" f" 缺少依赖: {missing_package}"),
+            detail=(
+                "AI 对话服务依赖未安装，当前无法调用智能体工作流。" f" 缺少依赖: {missing_package}"
+            ),
+        ) from exc
+
+
+def get_run_agent_stream():
+    """Import AI streaming workflow lazily."""
+    try:
+        from graphs.main_graph import run_agent_stream  # noqa: WPS433, E402
+
+        return run_agent_stream
+    except ModuleNotFoundError as exc:
+        missing_package = exc.name or "unknown dependency"
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "AI 对话服务依赖未安装，当前无法调用智能体工作流。" f" 缺少依赖: {missing_package}"
+            ),
         ) from exc
 
 
@@ -155,6 +175,7 @@ async def run_chat_agent(
     request: ChatRequest,
     wallet_address: str,
     session_id: str,
+    chat_history: list = None,
 ) -> dict:
     try:
         run_agent = get_run_agent()
@@ -162,6 +183,7 @@ async def run_chat_agent(
             user_input=request.message,
             wallet_address=wallet_address,
             session_id=session_id,
+            chat_history=chat_history or [],
         )
     except HTTPException as exc:
         if exc.status_code != 503:
@@ -243,8 +265,21 @@ async def send_message(
             request.message,
         )
 
+        # 查询最近的对话历史（最多10轮）
+        history_result = await db.execute(
+            select(ChatMessage)
+            .where(ChatMessage.session_id == chat_session.id)
+            .order_by(desc(ChatMessage.created_at))
+            .limit(20)  # 最近20条（10轮对话）
+        )
+        history_messages = list(reversed(history_result.scalars().all()))
+        chat_history = [
+            {"role": m.role.value, "content": m.content}
+            for m in history_messages[:-1]  # 排除刚刚保存的当前消息
+        ]
+
         # 调用 AI 智能体工作流
-        result = await run_chat_agent(request, wallet_address, session_id)
+        result = await run_chat_agent(request, wallet_address, session_id, chat_history)
 
         # 保存 AI 回复
         assistant_extra_data = dict(result)
@@ -282,6 +317,139 @@ async def send_message(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"AI 服务错误: {str(e)}")
+
+
+@router.post("/message/stream")
+async def send_message_stream(
+    request: ChatRequest,
+    db: AsyncSession = Depends(get_db),
+    redis=Depends(get_redis),
+):
+    """
+    流式发送消息给 AI（SSE）
+
+    前端使用 EventSource 或 fetch + ReadableStream 接收：
+    - event: token  → 逐字输出 AI 回复
+    - event: data   → 附加数据（策略、风控等）
+    - event: done   → 结束标志
+    - event: error  → 错误信息
+    """
+    if not request.message.strip():
+        raise HTTPException(status_code=400, detail="消息不能为空")
+
+    session_id = request.session_id or str(uuid.uuid4())
+
+    async def event_generator():
+        try:
+            wallet_address = request.wallet_address.strip() if request.wallet_address else ""
+            user_key = wallet_address or f"guest:{session_id}"
+            user = await get_or_create_user(db, user_key)
+            chat_session = await get_or_create_session(db, user, session_id, request.message)
+
+            await save_chat_message(db, chat_session, MessageRole.USER, request.message)
+
+            # 查询对话历史
+            history_result = await db.execute(
+                select(ChatMessage)
+                .where(ChatMessage.session_id == chat_session.id)
+                .order_by(desc(ChatMessage.created_at))
+                .limit(20)
+            )
+            history_messages = list(reversed(history_result.scalars().all()))
+            chat_history = [
+                {"role": m.role.value, "content": m.content} for m in history_messages[:-1]
+            ]
+
+            # 发送 session_id
+            yield f"event: session\ndata: {json.dumps({'session_id': session_id})}\n\n"
+
+            # 调用 AI 工作流（流式版本）
+            run_agent_stream = get_run_agent_stream()
+            full_explanation = ""
+            final_result = None
+
+            async for event in run_agent_stream(
+                user_input=request.message,
+                wallet_address=wallet_address,
+                session_id=session_id,
+                chat_history=chat_history,
+            ):
+                event_type = event.get("type")
+
+                # LLM 生成的 token - 立即发送到前端
+                if event_type == "token":
+                    token = event.get("content", "")
+                    if token:
+                        full_explanation += token
+                        yield f"event: token\ndata: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
+
+                # 工作流完成
+                elif event_type == "complete":
+                    final_result = event.get("result", {})
+
+                # 工作流中断（需要用户确认）
+                elif event_type == "interrupt":
+                    final_result = {
+                        "interrupted": True,
+                        "thread_id": event.get("thread_id"),
+                        "approval_preview": event.get("approval_preview"),
+                        "explanation": full_explanation or "请确认以下操作：",
+                    }
+
+                # 错误
+                elif event_type == "error":
+                    final_result = event.get("result", {})
+                    yield f"event: error\ndata: {json.dumps({'error': event.get('error', '未知错误')})}\n\n"
+
+            # 如果没有收到任何 token，使用 result 中的 explanation
+            if not final_result:
+                final_result = {"explanation": "抱歉，我暂时无法回答这个问题。"}
+
+            if not full_explanation and final_result.get("explanation"):
+                explanation = final_result["explanation"]
+                import re
+
+                tokens = re.findall(
+                    r"[\u4e00-\u9fff]+|[a-zA-Z0-9]+|[^\u4e00-\u9fffa-zA-Z0-9\s]|\s+", explanation
+                )
+                for token in tokens:
+                    yield f"event: token\ndata: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
+                full_explanation = explanation
+
+            # 发送附加数据
+            data = build_chat_data(final_result)
+            yield f"event: data\ndata: {json.dumps({'intent': final_result.get('intent', 'chat'), 'intent_params': final_result.get('intent_params', {}), 'data': data}, ensure_ascii=False)}\n\n"
+
+            # 保存 AI 回复
+            await save_chat_message(
+                db,
+                chat_session,
+                MessageRole.ASSISTANT,
+                full_explanation,
+                final_result.get("intent", ""),
+            )
+            await cache_delete_by_patterns(
+                redis,
+                [f"chat:sessions:{user_key}:*", f"chat:messages:{session_id}:*"],
+            )
+
+            yield "event: done\ndata: {}\n\n"
+
+        except Exception as e:
+            import traceback
+
+            traceback.print_exc()
+            yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.get("/sessions", response_model=List[SessionItem])
