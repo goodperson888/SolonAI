@@ -69,7 +69,11 @@ export const chatApi = {
     request: ChatRequest,
     callbacks: {
       onToken: (token: string) => void
-      onData?: (data: { intent: string; intent_params: Record<string, unknown>; data?: Record<string, unknown> }) => void
+      onData?: (data: {
+        intent: string
+        intent_params: Record<string, unknown>
+        data?: Record<string, unknown>
+      }) => void
       onSession?: (sessionId: string) => void
       onDone: () => void
       onError: (error: string) => void
@@ -284,8 +288,13 @@ export const strategyApi = {
   /**
    * 执行策略
    */
-  executeStrategy: (strategyId: string, walletAddress: string): Promise<{ success: boolean; message: string; transactions?: unknown[] }> => {
-    return apiClient.post(`/api/v1/strategy/${strategyId}/execute`, { wallet_address: walletAddress })
+  executeStrategy: (
+    strategyId: string,
+    walletAddress: string
+  ): Promise<{ success: boolean; message: string; transactions?: unknown[] }> => {
+    return apiClient.post(`/api/v1/strategy/${strategyId}/execute`, {
+      wallet_address: walletAddress,
+    })
   },
 }
 
@@ -351,8 +360,13 @@ export const riskApi = {
   /**
    * 获取交易历史
    */
-  transactions: (walletAddress: string, limit?: number): Promise<{ transactions: Transaction[] }> => {
-    return apiClient.get('/api/v1/risk/transactions', { params: { wallet_address: walletAddress, limit } })
+  transactions: (
+    walletAddress: string,
+    limit?: number
+  ): Promise<{ transactions: Transaction[] }> => {
+    return apiClient.get('/api/v1/risk/transactions', {
+      params: { wallet_address: walletAddress, limit },
+    })
   },
 
   /**
@@ -366,14 +380,21 @@ export const riskApi = {
    * 获取授权管理
    */
   authorizations: (walletAddress: string): Promise<{ authorizations: Authorization[] }> => {
-    return apiClient.get('/api/v1/risk/authorizations', { params: { wallet_address: walletAddress } })
+    return apiClient.get('/api/v1/risk/authorizations', {
+      params: { wallet_address: walletAddress },
+    })
   },
 
   /**
    * 撤销授权
    */
-  revokeAuth: (authId: string, walletAddress: string): Promise<{ success: boolean; message: string }> => {
-    return apiClient.post(`/api/v1/risk/authorizations/${authId}/revoke`, { wallet_address: walletAddress })
+  revokeAuth: (
+    authId: string,
+    walletAddress: string
+  ): Promise<{ success: boolean; message: string }> => {
+    return apiClient.post(`/api/v1/risk/authorizations/${authId}/revoke`, {
+      wallet_address: walletAddress,
+    })
   },
 }
 
@@ -410,7 +431,11 @@ export const knowledgeApi = {
   /**
    * 上传知识文档
    */
-  upload: (file: File, walletAddress: string, metadata?: Record<string, unknown>): Promise<{ document: KnowledgeDocument }> => {
+  upload: (
+    file: File,
+    walletAddress: string,
+    metadata?: Record<string, unknown>
+  ): Promise<{ document: KnowledgeDocument }> => {
     const formData = new FormData()
     formData.append('file', file)
     formData.append('wallet_address', walletAddress)
@@ -426,21 +451,36 @@ export const knowledgeApi = {
    * 获取文档列表
    */
   listDocuments: (walletAddress: string): Promise<{ documents: KnowledgeDocument[] }> => {
-    return apiClient.get('/api/v1/knowledge/documents', { params: { wallet_address: walletAddress } })
+    return apiClient.get('/api/v1/knowledge/documents', {
+      params: { wallet_address: walletAddress },
+    })
   },
 
   /**
    * 删除文档
    */
-  deleteDocument: (documentId: string, walletAddress: string): Promise<{ success: boolean; message: string }> => {
-    return apiClient.delete(`/api/v1/knowledge/documents/${documentId}`, { params: { wallet_address: walletAddress } })
+  deleteDocument: (
+    documentId: string,
+    walletAddress: string
+  ): Promise<{ success: boolean; message: string }> => {
+    return apiClient.delete(`/api/v1/knowledge/documents/${documentId}`, {
+      params: { wallet_address: walletAddress },
+    })
   },
 
   /**
    * 搜索知识库
    */
-  search: (query: string, walletAddress: string, topK?: number): Promise<{ results: KnowledgeSearchResult[] }> => {
-    return apiClient.post('/api/v1/knowledge/search', { query, wallet_address: walletAddress, top_k: topK })
+  search: (
+    query: string,
+    walletAddress: string,
+    topK?: number
+  ): Promise<{ results: KnowledgeSearchResult[] }> => {
+    return apiClient.post('/api/v1/knowledge/search', {
+      query,
+      wallet_address: walletAddress,
+      top_k: topK,
+    })
   },
 
   /**

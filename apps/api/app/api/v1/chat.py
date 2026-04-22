@@ -357,8 +357,7 @@ async def send_message_stream(
             )
             history_messages = list(reversed(history_result.scalars().all()))
             chat_history = [
-                {"role": m.role.value, "content": m.content}
-                for m in history_messages[:-1]
+                {"role": m.role.value, "content": m.content} for m in history_messages[:-1]
             ]
 
             # 发送 session_id
@@ -409,7 +408,10 @@ async def send_message_stream(
             if not full_explanation and final_result.get("explanation"):
                 explanation = final_result["explanation"]
                 import re
-                tokens = re.findall(r'[\u4e00-\u9fff]+|[a-zA-Z0-9]+|[^\u4e00-\u9fffa-zA-Z0-9\s]|\s+', explanation)
+
+                tokens = re.findall(
+                    r"[\u4e00-\u9fff]+|[a-zA-Z0-9]+|[^\u4e00-\u9fffa-zA-Z0-9\s]|\s+", explanation
+                )
                 for token in tokens:
                     yield f"event: token\ndata: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
                 full_explanation = explanation
@@ -420,8 +422,11 @@ async def send_message_stream(
 
             # 保存 AI 回复
             await save_chat_message(
-                db, chat_session, MessageRole.ASSISTANT,
-                full_explanation, final_result.get("intent", ""),
+                db,
+                chat_session,
+                MessageRole.ASSISTANT,
+                full_explanation,
+                final_result.get("intent", ""),
             )
             await cache_delete_by_patterns(
                 redis,
@@ -432,6 +437,7 @@ async def send_message_stream(
 
         except Exception as e:
             import traceback
+
             traceback.print_exc()
             yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
 

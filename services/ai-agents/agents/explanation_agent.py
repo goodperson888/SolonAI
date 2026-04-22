@@ -24,6 +24,7 @@ def _retrieve_rag_context(query: str, wallet_address: str = None) -> str:
         if wallet_address:
             try:
                 from rag.user_knowledge import retrieve_user_knowledge
+
                 result = retrieve_user_knowledge(wallet_address, query, top_k=3)
                 logger.info(f"[RAG] 用户知识库检索结果长度: {len(result)}")
                 if result:
@@ -34,6 +35,7 @@ def _retrieve_rag_context(query: str, wallet_address: str = None) -> str:
 
         # 降级到系统知识库
         from rag.knowledge_base import retrieve_knowledge
+
         result = retrieve_knowledge(query, top_k=3)
         logger.info(f"[RAG] 系统知识库检索结果长度: {len(result)}")
         return result
@@ -218,7 +220,9 @@ class ExplanationAgent(BaseAgent):
             prompt_input = f"用户说：{user_input}\n请用友好的语气回复。"
 
         # 从 RAG 知识库检索相关知识作为参考
-        logger.info(f"[ExplanationAgent] 准备检索 RAG，用户输入: {user_input}, 钱包: {wallet_address}")
+        logger.info(
+            f"[ExplanationAgent] 准备检索 RAG，用户输入: {user_input}, 钱包: {wallet_address}"
+        )
         rag_context = _retrieve_rag_context(user_input, wallet_address)
         if rag_context:
             logger.info(f"[ExplanationAgent] RAG 上下文已添加，长度: {len(rag_context)}")
@@ -260,7 +264,9 @@ class ExplanationAgent(BaseAgent):
             prompt_input = f"用户说：{user_input}\n请用友好的语气回复。"
 
         # 从 RAG 知识库检索相关知识作为参考
-        logger.info(f"[ExplanationAgent] 准备检索 RAG，用户输入: {user_input}, 钱包: {wallet_address}")
+        logger.info(
+            f"[ExplanationAgent] 准备检索 RAG，用户输入: {user_input}, 钱包: {wallet_address}"
+        )
         rag_context = _retrieve_rag_context(user_input, wallet_address)
         if rag_context:
             logger.info(f"[ExplanationAgent] RAG 上下文已添加，长度: {len(rag_context)}")
