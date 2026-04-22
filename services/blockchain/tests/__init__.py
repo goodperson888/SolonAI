@@ -97,7 +97,8 @@ async def test_jupiter_provider():
     print("=" * 60)
 
     jupiter = JupiterProvider()
-    tokens = config.get_tokens()
+    # Jupiter API 只支持 Mainnet 代币，始终使用 Mainnet 地址
+    tokens = config.MAINNET_TOKENS
 
     # 1. SOL 价格查询
     print("\n💲 查询 SOL 价格...")
@@ -105,7 +106,7 @@ async def test_jupiter_provider():
     if sol_price:
         print(f"  ✅ SOL 价格: ${sol_price:.2f}")
     else:
-        print("  ⚠️  SOL 价格不可用（Devnet 无价格数据正常）")
+        print("  ⚠️  SOL 价格不可用")
 
     # 2. Swap 报价 (SOL → USDC)
     print("\n🔄 获取 SOL → USDC 报价 (0.1 SOL)...")
@@ -131,9 +132,13 @@ async def test_jupiter_provider():
             print(f"  ✅ 交易数据前缀: {tx_base64[:40]}...")
         except Exception as e:
             print(f"  ⚠️  交易构建失败（Devnet 流动性可能不足）: {e}")
+            await jupiter.close()
+            raise
 
     except Exception as e:
-        print(f"  ⚠️  报价获取失败（Devnet 可能无此交易对）: {e}")
+        print(f"  ❌ 报价获取失败: {e}")
+        await jupiter.close()
+        raise
 
     await jupiter.close()
     print("\n  ✅ Jupiter 测试完成!")
@@ -176,7 +181,9 @@ async def test_raydium_provider():
         print(f"  ✅ 输出: {quote.out_amount} (USDC 最小单位)")
         print(f"  ✅ 价格影响: {quote.price_impact_pct}%")
     except Exception as e:
-        print(f"  ⚠️  Raydium 报价失败: {e}")
+        print(f"  ❌ Raydium 报价失败: {e}")
+        await raydium.close()
+        raise
 
     await raydium.close()
     print("\n  ✅ Raydium 测试完成!")
@@ -210,7 +217,9 @@ async def test_transaction_service():
         print(f"  ✅ 输出: {quote.out_amount} (USDC 最小单位)")
         print(f"  ✅ 价格影响: {quote.price_impact_pct}%")
     except Exception as e:
-        print(f"  ⚠️  聚合报价失败: {e}")
+        print(f"  ❌ 聚合报价失败: {e}")
+        await service.close()
+        raise
 
     await service.close()
     print("\n  ✅ 交易聚合服务测试完成!")
@@ -247,7 +256,9 @@ async def test_airdrop():
         balance = await client.get_balance(address)
         print(f"  ✅ 余额: {balance / 1e9:.4f} SOL")
     except Exception as e:
-        print(f"  ⚠️  Airdrop 失败（可能超过 Devnet 限制）: {e}")
+        print(f"  ❌ Airdrop 失败: {e}")
+        await client.close()
+        raise
 
     await client.close()
     print("\n  ✅ Airdrop 测试完成!")
@@ -263,6 +274,8 @@ async def main():
 
     results = {}
 
+    all_passed = True
+
     for name, test_func in [
         ("RPC 客户端", test_rpc_client),
         ("钱包服务", test_wallet_service),
@@ -276,6 +289,7 @@ async def main():
             results[name] = "✅ 通过"
         except Exception as e:
             results[name] = f"❌ 失败: {e}"
+            all_passed = False
             import traceback
 
             traceback.print_exc()
@@ -287,6 +301,9 @@ async def main():
     for name, status in results.items():
         print(f"  {status}  {name}")
     print("=" * 60)
+
+    if not all_passed:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

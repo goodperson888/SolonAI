@@ -39,7 +39,7 @@ def get_wallet_service():
         raise HTTPException(
             status_code=503,
             detail=(
-                "区块链资产服务依赖未安装，当前无法查询链上资产。" f" 缺少依赖: {missing_package}"
+                f"区块链资产服务依赖未安装，当前无法查询链上资产。 缺少依赖: {missing_package}"
             ),
         ) from exc
 

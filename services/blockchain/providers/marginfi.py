@@ -202,12 +202,23 @@ class MarginFiProvider(BaseDeFiProvider):
         except Exception as e:
             logger.warning(f"MarginFi: RPC 链上数据解析失败: {e}")
 
-        # 方案 2: 使用 DeFiLlama API 获取利率
+        # 方案 2: 使用 DeFiLlama API 获取利率，合并 KNOWN_BANKS 补全缺失池
         try:
-            pools = await self._fetch_pools_from_defillama()
-            if pools:
-                logger.info(f"MarginFi: 从 DeFiLlama 获取到 {len(pools)} 个借贷池")
-                return pools
+            defillama_pools = await self._fetch_pools_from_defillama()
+            if defillama_pools:
+                found_symbols = {p.symbol for p in defillama_pools}
+                for symbol, info in KNOWN_BANKS.items():
+                    if symbol not in found_symbols:
+                        defillama_pools.append(
+                            LendingPool(
+                                symbol=symbol,
+                                mint=info["mint"],
+                                bank_address=info["bank"],
+                                decimals=info["decimals"],
+                            )
+                        )
+                logger.info(f"MarginFi: DeFiLlama + fallback = {len(defillama_pools)} 个借贷池")
+                return defillama_pools
         except Exception as e:
             logger.warning(f"MarginFi: DeFiLlama API 失败: {e}")
 

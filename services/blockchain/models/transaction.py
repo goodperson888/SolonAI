@@ -50,4 +50,6 @@ class TransactionResult(BaseModel):
     status: TransactionStatus = Field(description="交易状态")
     slot: int | None = Field(default=None, description="确认 Slot")
     error: str | None = Field(default=None, description="错误信息")
-    serialized_transaction: str | None = Field(default=None, description="Base64 编码的未签名交易（供前端签名）")
+    serialized_transaction: str | None = Field(
+        default=None, description="Base64 编码的未签名交易（供前端签名）"
+    )

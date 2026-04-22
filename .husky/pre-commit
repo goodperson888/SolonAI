@@ -21,12 +21,12 @@ fi
 # 3. 自动修复后端格式并检查
 echo ""
 echo "🔍 检查后端代码格式..."
-python3 -m ruff format apps/api/ services/ 2>&1
-python3 -m ruff check --fix apps/api/ services/ 2>&1
+apps/api/.venv/bin/python -m ruff format apps/api/ services/ 2>&1
+apps/api/.venv/bin/python -m ruff check --fix apps/api/ services/ 2>&1
 git add -u apps/api/ services/
 
 # 修复后再检查是否还有无法自动修复的问题
-python3 -m ruff check apps/api/ services/ 2>&1
+apps/api/.venv/bin/python -m ruff check apps/api/ services/ 2>&1
 BACKEND_LINT_EXIT=$?
 
 if [ $BACKEND_LINT_EXIT -ne 0 ]; then

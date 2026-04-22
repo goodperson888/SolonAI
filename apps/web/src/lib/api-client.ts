@@ -53,6 +53,21 @@ export interface ChatResponse {
   data?: Record<string, unknown>
 }
 
+export interface ChatSessionItem {
+  id: string
+  session_id: string
+  title?: string
+  created_at: string
+}
+
+export interface ChatMessageItem {
+  id: string
+  role: 'user' | 'assistant' | 'system'
+  content: string
+  intent?: string
+  created_at: string
+}
+
 export const chatApi = {
   /**
    * 发送消息给 AI
@@ -151,6 +166,18 @@ export const chatApi = {
    */
   healthCheck: (): Promise<{ status: string }> => {
     return apiClient.get('/api/v1/chat/health')
+  },
+
+  getSessions: (walletAddress: string, limit = 20): Promise<ChatSessionItem[]> => {
+    return apiClient.get('/api/v1/chat/sessions', {
+      params: { wallet_address: walletAddress, limit },
+    })
+  },
+
+  getMessages: (sessionId: string, limit = 100): Promise<ChatMessageItem[]> => {
+    return apiClient.get(`/api/v1/chat/sessions/${sessionId}/messages`, {
+      params: { limit },
+    })
   },
 }
 

@@ -40,12 +40,12 @@
       "prettier --write"
     ],
     "apps/api/**/*.py": [
-      "python3 -m ruff check --fix",
-      "python3 -m ruff format"
+      "apps/api/.venv/bin/python -m ruff check --fix",
+      "apps/api/.venv/bin/python -m ruff format"
     ],
     "services/**/*.py": [
-      "python3 -m ruff check --fix",
-      "python3 -m ruff format"
+      "apps/api/.venv/bin/python -m ruff check --fix",
+      "apps/api/.venv/bin/python -m ruff format"
     ]
   },
   "engines": {

@@ -81,7 +81,7 @@ class ResilientHTTPClient:
             except (httpx.ConnectError, httpx.ConnectTimeout) as e:
                 last_error = e
                 logger.warning(
-                    f"HTTP 连接失败 [{url[:50]}...] " f"(尝试 {attempt + 1}/{self._max_retries}): {e}"
+                    f"HTTP 连接失败 [{url[:50]}...] (尝试 {attempt + 1}/{self._max_retries}): {e}"
                 )
                 if attempt < self._max_retries - 1:
                     delay = self._retry_delay * (2**attempt)
@@ -90,7 +90,7 @@ class ResilientHTTPClient:
             except httpx.ReadTimeout as exc:
                 last_error = exc
                 logger.warning(
-                    f"HTTP 读取超时 [{url[:50]}...] " f"(尝试 {attempt + 1}/{self._max_retries})"
+                    f"HTTP 读取超时 [{url[:50]}...] (尝试 {attempt + 1}/{self._max_retries})"
                 )
                 if attempt < self._max_retries - 1:
                     delay = self._retry_delay * (2**attempt)

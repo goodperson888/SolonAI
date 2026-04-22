@@ -93,7 +93,7 @@ class TransactionService:
 
         # 选择输出最多的报价
         best = max(quotes, key=lambda q: q.out_amount)
-        logger.info(f"最优报价由 {best.provider} 提供: " f"{best.in_amount} → {best.out_amount}")
+        logger.info(f"最优报价由 {best.provider} 提供: {best.in_amount} → {best.out_amount}")
         return best
 
     @staticmethod

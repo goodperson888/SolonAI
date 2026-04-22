@@ -230,84 +230,84 @@ def create_workflow():
     workflow = StateGraph(GraphState)
 
     # ===== 添加节点 =====
-    workflow.add_node("intent", intent_agent)
-    workflow.add_node("data_aggregation", data_agent)
-    workflow.add_node("strategy", strategy_agent)
-    workflow.add_node("risk", risk_agent)
-    workflow.add_node("validation", validation_agent)
-    workflow.add_node("human_approval", human_approval_node)
-    workflow.add_node("execution", execution_agent)
-    workflow.add_node("monitoring", monitoring_agent)
-    workflow.add_node("explanation", explanation_agent)
-    workflow.add_node("error_recovery", error_recovery_node)
+    workflow.add_node("intent_node", intent_agent)
+    workflow.add_node("data_aggregation_node", data_agent)
+    workflow.add_node("strategy_node", strategy_agent)
+    workflow.add_node("risk_node", risk_agent)
+    workflow.add_node("validation_node", validation_agent)
+    workflow.add_node("human_approval_node", human_approval_node)
+    workflow.add_node("execution_node", execution_agent)
+    workflow.add_node("monitoring_node", monitoring_agent)
+    workflow.add_node("explanation_node", explanation_agent)
+    workflow.add_node("error_recovery_node", error_recovery_node)
 
     # ===== 设置入口 =====
-    workflow.set_entry_point("intent")
+    workflow.set_entry_point("intent_node")
 
     # ===== 定义边 =====
 
     # Intent → DataAggregation（含错误恢复分支）
     workflow.add_conditional_edges(
-        "intent",
+        "intent_node",
         route_after_intent,
         {
-            "data_aggregation": "data_aggregation",
-            "error_recovery": "error_recovery",
+            "data_aggregation": "data_aggregation_node",
+            "error_recovery": "error_recovery_node",
         },
     )
 
     # DataAggregation → 根据意图路由
     workflow.add_conditional_edges(
-        "data_aggregation",
+        "data_aggregation_node",
         route_by_intent,
         {
-            "query_assets": "explanation",
-            "generate_strategy": "strategy",
-            "execute_trade": "human_approval",  # 交易执行先走人机确认
-            "risk_check": "risk",
-            "chat": "explanation",
+            "query_assets": "explanation_node",
+            "generate_strategy": "strategy_node",
+            "execute_trade": "human_approval_node",  # 交易执行先走人机确认
+            "risk_check": "risk_node",
+            "chat": "explanation_node",
         },
     )
 
     # 策略生成流程
-    workflow.add_edge("strategy", "risk")
+    workflow.add_edge("strategy_node", "risk_node")
 
     # Risk → Validation（策略生成）或 Explanation（风控检查）
     workflow.add_conditional_edges(
-        "risk",
+        "risk_node",
         route_after_risk,
         {
-            "validation": "validation",
-            "explanation": "explanation",
+            "validation": "validation_node",
+            "explanation": "explanation_node",
         },
     )
 
     # Validation → HumanApproval（通过）或 Explanation（不通过）
     workflow.add_conditional_edges(
-        "validation",
+        "validation_node",
         route_after_validation,
         {
-            "human_approval": "human_approval",
-            "explanation": "explanation",
+            "human_approval": "human_approval_node",
+            "explanation": "explanation_node",
         },
     )
 
     # HumanApproval → Execution（interrupt 会在 execution 之前暂停）
-    workflow.add_edge("human_approval", "execution")
+    workflow.add_edge("human_approval_node", "execution_node")
 
     # Execution → Monitoring → Explanation → END
-    workflow.add_edge("execution", "monitoring")
-    workflow.add_edge("monitoring", "explanation")
-    workflow.add_edge("explanation", END)
+    workflow.add_edge("execution_node", "monitoring_node")
+    workflow.add_edge("monitoring_node", "explanation_node")
+    workflow.add_edge("explanation_node", END)
 
     # ErrorRecovery → END
-    workflow.add_edge("error_recovery", END)
+    workflow.add_edge("error_recovery_node", END)
 
     # 编译工作流，启用 checkpointer 和 interrupt
     # interrupt_before=["execution"] 表示在 execution 节点执行前暂停
     return workflow.compile(
         checkpointer=_checkpointer,
-        interrupt_before=["execution"],
+        interrupt_before=["execution_node"],
     )
 
 
