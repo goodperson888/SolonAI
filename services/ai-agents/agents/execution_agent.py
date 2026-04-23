@@ -38,7 +38,7 @@ class ExecutionAgent(BaseAgent):
 策略：
 {json.dumps(strategy, ensure_ascii=False, indent=2)}
 
-用户钱包地址：{wallet_address or '待用户连接钱包'}
+用户钱包地址：{wallet_address or "待用户连接钱包"}
 
 请生成详细的交易步骤，包括每步的 Gas 费预估。"""
 

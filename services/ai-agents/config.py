@@ -14,9 +14,10 @@ CURRENT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = CURRENT_DIR.parent.parent
 
 # Load local AI service config first, then allow the API app config to fill in
-# missing shared values during integrated local development.
+# missing shared values during integrated local development. The API .env is
+# allowed to override empty Docker Compose defaults such as DOUBAO_API_KEY="".
 load_dotenv(CURRENT_DIR / ".env")
-load_dotenv(PROJECT_ROOT / "apps" / "api" / ".env", override=False)
+load_dotenv(PROJECT_ROOT / "apps" / "api" / ".env", override=True)
 
 
 def _clean_env_value(value: str) -> str:

@@ -53,6 +53,21 @@ export interface ChatResponse {
   data?: Record<string, unknown>
 }
 
+export interface ChatSessionItem {
+  id: string
+  session_id: string
+  title?: string
+  created_at: string
+}
+
+export interface ChatMessageItem {
+  id: string
+  role: 'user' | 'assistant' | 'system'
+  content: string
+  intent?: string
+  created_at: string
+}
+
 export const chatApi = {
   /**
    * 发送消息给 AI
@@ -166,15 +181,19 @@ export const chatApi = {
   /**
    * 获取会话列表
    */
-  getSessions: (walletAddress: string): Promise<SessionItem[]> => {
-    return apiClient.get('/api/v1/chat/sessions', { params: { wallet_address: walletAddress } })
+  getSessions: (walletAddress: string, limit = 20): Promise<ChatSessionItem[]> => {
+    return apiClient.get('/api/v1/chat/sessions', {
+      params: { wallet_address: walletAddress, limit },
+    })
   },
 
   /**
    * 获取会话消息
    */
-  getMessages: (sessionId: string): Promise<MessageItem[]> => {
-    return apiClient.get(`/api/v1/chat/sessions/${sessionId}/messages`)
+  getMessages: (sessionId: string, limit = 100): Promise<ChatMessageItem[]> => {
+    return apiClient.get(`/api/v1/chat/sessions/${sessionId}/messages`, {
+      params: { limit },
+    })
   },
 
   /**
@@ -188,21 +207,6 @@ export const chatApi = {
       params: { wallet_address: walletAddress },
     })
   },
-}
-
-export interface SessionItem {
-  id: string
-  session_id: string
-  title: string
-  created_at: string
-}
-
-export interface MessageItem {
-  id: string
-  role: 'user' | 'assistant'
-  content: string
-  intent?: string
-  created_at: string
 }
 
 // ===== 资产 API =====

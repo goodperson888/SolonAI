@@ -27,6 +27,9 @@ interface MessageBubbleProps {
 export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
   const isUser = message.role === 'user'
 
+  // 清除 AI 回复中的 HTML 标签（如 <br>）
+  const cleanContent = isUser ? message.content : message.content.replace(/<[^>]*>/g, '')
+
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
       <div className={`${isUser ? 'order-2 max-w-[70%]' : 'order-1 max-w-[92%]'}`}>
@@ -81,7 +84,14 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
                 <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.content}</p>
               ) : (
                 <div className="prose prose-invert prose-sm max-w-none [&_h1]:mb-3 [&_h2]:mb-3 [&_h3]:mb-3 [&_ol:last-child]:mb-0 [&_ol]:mb-3 [&_p:last-child]:mb-0 [&_p]:mb-3 [&_table]:border-collapse [&_table]:border [&_table]:border-gray-600 [&_td]:border [&_td]:border-gray-600 [&_td]:px-3 [&_td]:py-2 [&_th]:border [&_th]:border-gray-600 [&_th]:bg-gray-700/50 [&_th]:px-3 [&_th]:py-2 [&_ul:last-child]:mb-0 [&_ul]:mb-3">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      br: () => null, // 移除所有 <br> 标签
+                    }}
+                  >
+                    {cleanContent}
+                  </ReactMarkdown>
                 </div>
               )}
             </div>

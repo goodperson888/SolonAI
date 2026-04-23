@@ -6,7 +6,7 @@
 
 import enum
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.core.database import Base
 from sqlalchemy import JSON, Column, DateTime, ForeignKey, String, Text, Uuid
@@ -55,7 +55,12 @@ class ChatMessage(Base):
     extra_data = Column(JSON, nullable=False, default=dict)
 
     # 时间戳
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        index=True,
+    )
 
     def __repr__(self):
         return f"<ChatMessage {self.role} {self.content[:20]}>"

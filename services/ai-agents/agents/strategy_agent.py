@@ -33,9 +33,9 @@ class StrategyAgent(BaseAgent):
         # 构建给 LLM 的输入
         prompt_input = f"""
 用户需求：
-- 风险偏好：{intent_params.get('risk_level', 'conservative')}
-- 投资金额：{intent_params.get('amount', '未指定')}
-- 指定代币：{intent_params.get('token', '未指定')}
+- 风险偏好：{intent_params.get("risk_level", "conservative")}
+- 投资金额：{intent_params.get("amount", "未指定")}
+- 指定代币：{intent_params.get("token", "未指定")}
 
 用户当前持仓：
 {json.dumps(wallet_assets, ensure_ascii=False, indent=2)}

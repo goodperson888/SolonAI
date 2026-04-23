@@ -14,7 +14,9 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 services_root = os.path.abspath(os.path.join(current_dir, "..", ".."))
 sys.path.insert(0, services_root)
 
-from base_agent import BaseAgent
+from base_agent import BaseAgent  # noqa: E402
+from blockchain.services.defi_aggregation_service import DeFiAggregationService  # noqa: E402
+from blockchain.services.wallet_service import WalletService  # noqa: E402
 from blockchain.solana_client import SolanaClient  # noqa: E402
 from prompts import get_prompt  # noqa: E402
 
@@ -85,8 +87,14 @@ class DataAggregationAgent(BaseAgent):
                 # 获取 Token 账户（暂未使用，待实现）
                 # token_accounts = await solana_client.get_token_accounts(wallet_address)
 
-                # TODO: 接入价格 API，暂时使用固定价格
-                sol_price = 178.32
+                # Prefer the shared real-time price service; fall back to a
+                # conservative zero value rather than stale hard-coded prices.
+                defi_service = DeFiAggregationService()
+                try:
+                    prices = await defi_service.get_realtime_prices()
+                    sol_price = prices.get("SOL", {}).get("price_usd") or 0
+                finally:
+                    await defi_service.close()
 
                 # 转换为 Agent 使用的格式
                 wallet_assets = []
@@ -108,12 +116,34 @@ class DataAggregationAgent(BaseAgent):
                 else:
                     print("[DataAggregationAgent] SOL 余额为 0，不添加资产")
 
-                # TODO: 解析 Token 账户数据
-                # 目前 token_accounts 返回原始数据，需要进一步解析
+                try:
+                    wallet_service = WalletService()
+                    try:
+                        portfolio = await wallet_service.get_wallet_portfolio(wallet_address)
+                    finally:
+                        await wallet_service.close()
+
+                    for token in portfolio.tokens:
+                        wallet_assets.append(
+                            {
+                                "token": token.symbol or token.mint[:8],
+                                "mint": token.mint,
+                                "balance": float(token.balance),
+                                "price_usd": (
+                                    float(token.usd_value / token.balance)
+                                    if token.usd_value and token.balance
+                                    else 0
+                                ),
+                                "value_usd": float(token.usd_value or 0),
+                            }
+                        )
+                    state["total_value_usd"] = float(portfolio.total_usd_value)
+                except Exception as e:
+                    print(f"[DataAggregationAgent] Token 资产聚合失败，保留 SOL 数据: {e}")
+                    state["total_value_usd"] = sol_balance * sol_price
 
                 print(f"[DataAggregationAgent] 最终资产列表: {wallet_assets}")
                 state["wallet_assets"] = wallet_assets
-                state["total_value_usd"] = sol_balance * sol_price
 
             except Exception as e:
                 print(f"Error fetching wallet assets: {e}")
@@ -131,8 +161,21 @@ class DataAggregationAgent(BaseAgent):
             state["wallet_assets"] = []
             state["total_value_usd"] = 0
 
-        # DeFi 协议数据（目前使用 Mock）
-        state["protocol_data"] = MOCK_PROTOCOL_DATA
+        try:
+            defi_service = DeFiAggregationService()
+            try:
+                overview = await defi_service.get_overview()
+            finally:
+                await defi_service.close()
+            state["protocol_data"] = overview.get("yields", {}).get("protocols", {})
+            state["market_prices"] = overview.get("prices", {})
+            state["defi_best_opportunities"] = overview.get("yields", {}).get(
+                "best_opportunities",
+                [],
+            )
+        except Exception as e:
+            print(f"[DataAggregationAgent] DeFi 聚合失败，使用 Mock 数据: {e}")
+            state["protocol_data"] = MOCK_PROTOCOL_DATA
 
         state["current_agent"] = self.name
         return state
