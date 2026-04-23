@@ -7,6 +7,7 @@
 
 import logging
 from decimal import Decimal
+from typing import List, Optional
 
 from ..cache import cached
 from ..config import config
@@ -22,8 +23,8 @@ class WalletService:
 
     def __init__(
         self,
-        rpc_client: EnhancedRPCClient | None = None,
-        jupiter: JupiterProvider | None = None,
+        rpc_client: Optional[EnhancedRPCClient] = None,
+        jupiter: Optional[JupiterProvider] = None,
     ):
         self._rpc = rpc_client or EnhancedRPCClient()
         self._jupiter = jupiter or JupiterProvider()
@@ -55,7 +56,7 @@ class WalletService:
         return SolBalance(lamports=lamports, sol=sol, usd_value=usd_value)
 
     @cached("token_accounts", ttl=config.CACHE_TTL_TOKENS)
-    async def get_token_accounts(self, address: str) -> list[TokenAccount]:
+    async def get_token_accounts(self, address: str) -> List[TokenAccount]:
         """
         获取所有 SPL Token 持仓（缓存 60s）
 

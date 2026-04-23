@@ -9,9 +9,8 @@ Provides helpers for:
 
 import base64
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Dict, List, Optional, Union
 
-from solana.transaction import Transaction
 from solders.compute_budget import set_compute_unit_limit, set_compute_unit_price
 from solders.hash import Hash
 from solders.instruction import AccountMeta, Instruction
@@ -19,7 +18,7 @@ from solders.message import Message, MessageV0
 from solders.null_signer import NullSigner
 from solders.pubkey import Pubkey
 from solders.system_program import TransferParams, transfer
-from solders.transaction import VersionedTransaction
+from solders.transaction import Transaction, VersionedTransaction
 
 MAX_SOLANA_TX_SIZE_BYTES = 1232
 
@@ -41,7 +40,7 @@ class TransactionBuilder:
 
     @staticmethod
     def build_transaction(
-        instructions: list[Instruction],
+        instructions: List[Instruction],
         payer: Pubkey,
         recent_blockhash: str,
     ) -> Transaction:
@@ -63,7 +62,7 @@ class TransactionBuilder:
     @staticmethod
     def create_instruction(
         program_id: str,
-        accounts: list[dict[str, Any]],
+        accounts: List[Dict[str, Any]],
         data: bytes,
     ) -> Instruction:
         """Create a solders instruction from a JSON-friendly payload."""
@@ -117,7 +116,7 @@ class TransactionBuilder:
         return base64.b64encode(bytes(tx)).decode("utf-8")
 
     @classmethod
-    def parse_transaction(cls, transaction_base64: str) -> dict[str, Any]:
+    def parse_transaction(cls, transaction_base64: str) -> Dict[str, Any]:
         """Parse transaction signatures, account keys, and instructions."""
         tx = cls.decode_transaction(transaction_base64)
         message = tx.message
@@ -151,7 +150,7 @@ class TransactionBuilder:
         }
 
     @classmethod
-    def parse_signatures(cls, transaction_base64: str) -> dict[str, Any]:
+    def parse_signatures(cls, transaction_base64: str) -> Dict[str, Any]:
         """Parse only the signature section from a serialized transaction."""
         parsed = cls.parse_transaction(transaction_base64)
         return {
@@ -164,11 +163,11 @@ class TransactionBuilder:
     @classmethod
     def build_v0_transaction_base64(
         cls,
-        instructions: list[Instruction],
+        instructions: List[Instruction],
         payer: str,
         recent_blockhash: str,
-        compute_unit_limit: int | None = None,
-        compute_unit_price_micro_lamports: int | None = None,
+        compute_unit_limit: Optional[int] = None,
+        compute_unit_price_micro_lamports: Optional[int] = None,
     ) -> str:
         """Build an unsigned/signable v0 transaction encoded as base64."""
         payer_pubkey = Pubkey.from_string(payer)
@@ -186,14 +185,14 @@ class TransactionBuilder:
     @classmethod
     def pack_instructions(
         cls,
-        instructions: list[Instruction],
+        instructions: List[Instruction],
         payer: str,
         recent_blockhash: str,
         max_instructions_per_tx: int = 8,
         max_tx_size_bytes: int = MAX_SOLANA_TX_SIZE_BYTES,
-        compute_unit_limit: int | None = None,
-        compute_unit_price_micro_lamports: int | None = None,
-    ) -> list[PackedTransaction]:
+        compute_unit_limit: Optional[int] = None,
+        compute_unit_price_micro_lamports: Optional[int] = None,
+    ) -> List[PackedTransaction]:
         """
         Pack instructions into one or more unsigned v0 transactions.
 
@@ -204,10 +203,10 @@ class TransactionBuilder:
             return []
 
         payer_pubkey = Pubkey.from_string(payer)
-        packed: list[PackedTransaction] = []
-        current: list[Instruction] = []
+        packed: List[PackedTransaction] = []
+        current: List[Instruction] = []
 
-        def finalize(chunk: list[Instruction]) -> None:
+        def finalize(chunk: List[Instruction]) -> None:
             all_instructions = cls._with_compute_budget(
                 chunk,
                 compute_unit_limit,
@@ -259,7 +258,7 @@ class TransactionBuilder:
         return packed
 
     @classmethod
-    def instruction_from_payload(cls, payload: dict[str, Any]) -> Instruction:
+    def instruction_from_payload(cls, payload: Dict[str, Any]) -> Instruction:
         """Build an instruction from API payload data."""
         instruction_type = payload.get("type", "custom")
         if instruction_type == "system_transfer":
@@ -287,7 +286,7 @@ class TransactionBuilder:
     @classmethod
     def _build_unsigned_v0_transaction(
         cls,
-        instructions: list[Instruction],
+        instructions: List[Instruction],
         payer: Pubkey,
         recent_blockhash: str,
     ) -> VersionedTransaction:
@@ -305,11 +304,11 @@ class TransactionBuilder:
 
     @staticmethod
     def _with_compute_budget(
-        instructions: list[Instruction],
-        compute_unit_limit: int | None,
-        compute_unit_price_micro_lamports: int | None,
-    ) -> list[Instruction]:
-        budget_instructions: list[Instruction] = []
+        instructions: List[Instruction],
+        compute_unit_limit: Optional[int],
+        compute_unit_price_micro_lamports: Optional[int],
+    ) -> List[Instruction]:
+        budget_instructions: List[Instruction] = []
         if compute_unit_limit is not None:
             budget_instructions.append(set_compute_unit_limit(int(compute_unit_limit)))
         if compute_unit_price_micro_lamports is not None:
@@ -319,7 +318,7 @@ class TransactionBuilder:
         return [*budget_instructions, *instructions]
 
     @classmethod
-    def _parse_accounts(cls, message: Message | MessageV0) -> list[dict[str, Any]]:
+    def _parse_accounts(cls, message: Union[Message, MessageV0]) -> List[Dict[str, Any]]:
         account_keys = list(message.account_keys)
         header = message.header
         required = int(header.num_required_signatures)
@@ -345,7 +344,7 @@ class TransactionBuilder:
         return accounts
 
     @classmethod
-    def _parse_instructions(cls, message: Message | MessageV0) -> list[dict[str, Any]]:
+    def _parse_instructions(cls, message: Union[Message, MessageV0]) -> List[Dict[str, Any]]:
         account_keys = list(message.account_keys)
         instructions = []
 
@@ -369,7 +368,7 @@ class TransactionBuilder:
         return instructions
 
     @staticmethod
-    def _account_key_at(account_keys: list[Pubkey], index: int) -> str | None:
+    def _account_key_at(account_keys: List[Pubkey], index: int) -> Optional[str]:
         if 0 <= index < len(account_keys):
             return str(account_keys[index])
         return None

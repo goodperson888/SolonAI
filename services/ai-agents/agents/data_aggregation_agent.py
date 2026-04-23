@@ -18,6 +18,7 @@ from base_agent import BaseAgent  # noqa: E402
 from blockchain.services.defi_aggregation_service import DeFiAggregationService  # noqa: E402
 from blockchain.services.wallet_service import WalletService  # noqa: E402
 from blockchain.solana_client import SolanaClient  # noqa: E402
+from prompts import get_prompt  # noqa: E402
 
 # ===== Mock DeFi 协议数据（后续可对接真实协议 API）=====
 
@@ -61,9 +62,11 @@ class DataAggregationAgent(BaseAgent):
 
     @property
     def system_prompt(self) -> str:
-        return """你是数据聚合助手，负责整理链上数据。
-根据用户意图，筛选并整理相关的链上数据。
-直接返回整理后的数据摘要。"""
+        """从文件加载 system prompt"""
+        return get_prompt("data_aggregation_agent", language="zh", version="v1")
+
+    # 原 prompt 已移至 prompts/data_aggregation_agent_zh_v1.txt
+    # 如需修改 prompt，请编辑该文件
 
     async def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """

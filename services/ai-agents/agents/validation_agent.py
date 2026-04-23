@@ -7,6 +7,7 @@ ValidationAgent - 结果验证
 from typing import Any, Dict
 
 from base_agent import BaseAgent
+from prompts import get_prompt
 
 # 已知协议白名单
 KNOWN_PROTOCOLS = [
@@ -30,11 +31,11 @@ class ValidationAgent(BaseAgent):
 
     @property
     def system_prompt(self) -> str:
-        return """你是结果校验专家，负责检查其他 Agent 输出的准确性。
-你的核心原则：
-1. 零容忍幻觉：所有信息必须有依据
-2. 严格合规：不能有投资建议、保本承诺等违规内容
-3. 用户安全第一：有疑问的内容一律标记"""
+        """从文件加载 system prompt"""
+        return get_prompt("validation_agent", language="zh", version="v1")
+
+    # 原 prompt 已移至 prompts/validation_agent_zh_v1.txt
+    # 如需修改 prompt，请编辑该文件
 
     async def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """验证策略和风控结果"""

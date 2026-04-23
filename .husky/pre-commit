@@ -35,5 +35,26 @@ if [ $BACKEND_LINT_EXIT -ne 0 ]; then
   exit 1
 fi
 
+# 4. 类型检查（检测未导入的类型和类型错误）
+echo ""
+echo "🔍 检查后端类型注解..."
+# --python-version 3.10: 允许新语法（为未来升级做准备）
+# 只检查明显错误：未定义的名称、缺失导入等
+apps/api/.venv/bin/python -m mypy apps/api/ services/ \
+  --python-version 3.10 \
+  --ignore-missing-imports \
+  --no-strict-optional 2>&1 | grep -E "(error:|Error)" || true
+
+MYPY_EXIT=${PIPESTATUS[0]}
+
+if [ $MYPY_EXIT -ne 0 ]; then
+  echo ""
+  echo "❌ 发现类型注解错误，请修复后再提交"
+  echo "💡 常见问题："
+  echo "   - 缺少 typing 导入：from typing import List, Dict, Optional"
+  echo "   - 使用了未定义的类型名称"
+  exit 1
+fi
+
 echo ""
 echo "✅ 所有检查通过"

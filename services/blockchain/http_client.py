@@ -6,6 +6,7 @@ HTTP 请求容错工具
 
 import asyncio
 import logging
+from typing import Dict, Optional
 
 import httpx
 
@@ -28,7 +29,7 @@ class ResilientHTTPClient:
         timeout: float = 30.0,
         max_retries: int = 3,
         retry_delay: float = 1.0,
-        headers: dict[str, str] | None = None,
+        headers: Optional[Dict[str, str]] = None,
     ):
         self._max_retries = max_retries
         self._retry_delay = retry_delay

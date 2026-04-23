@@ -14,7 +14,7 @@ import hashlib
 import logging
 import time
 from collections import OrderedDict
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ class MemoryCache:
         self._hits = 0
         self._misses = 0
 
-    async def get(self, key: str) -> Any | None:
+    async def get(self, key: str) -> Optional[Any]:
         """获取缓存值，过期返回 None"""
         async with self._lock:
             if key in self._cache:

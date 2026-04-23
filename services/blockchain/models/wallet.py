@@ -3,6 +3,7 @@
 """
 
 from decimal import Decimal
+from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -12,19 +13,19 @@ class SolBalance(BaseModel):
 
     lamports: int = Field(description="Lamports 单位余额")
     sol: Decimal = Field(description="SOL 单位余额")
-    usd_value: Decimal | None = Field(default=None, description="USD 估值")
+    usd_value: Optional[Decimal] = Field(default=None, description="USD 估值")
 
 
 class TokenAccount(BaseModel):
     """SPL Token 账户"""
 
     mint: str = Field(description="Token Mint 地址")
-    symbol: str | None = Field(default=None, description="Token 符号")
-    name: str | None = Field(default=None, description="Token 名称")
+    symbol: Optional[str] = Field(default=None, description="Token 符号")
+    name: Optional[str] = Field(default=None, description="Token 名称")
     decimals: int = Field(description="小数位数")
     balance_raw: int = Field(description="原始余额（最小单位）")
     balance: Decimal = Field(description="人类可读余额")
-    usd_value: Decimal | None = Field(default=None, description="USD 估值")
+    usd_value: Optional[Decimal] = Field(default=None, description="USD 估值")
 
 
 class WalletPortfolio(BaseModel):

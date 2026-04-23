@@ -9,7 +9,7 @@ import asyncio
 import logging
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Any
+from typing import Any, Dict, List, Optional
 
 from ..cache import cached, get_cache
 from ..config import config
@@ -34,9 +34,9 @@ class DeFiAggregationService:
 
     def __init__(
         self,
-        jupiter: JupiterProvider | None = None,
-        raydium: RaydiumProvider | None = None,
-        marginfi: MarginFiProvider | None = None,
+        jupiter: Optional[JupiterProvider] = None,
+        raydium: Optional[RaydiumProvider] = None,
+        marginfi: Optional[MarginFiProvider] = None,
     ):
         self._jupiter = jupiter or JupiterProvider()
         self._raydium = raydium or RaydiumProvider()
@@ -46,7 +46,7 @@ class DeFiAggregationService:
         self._owns_marginfi = marginfi is None
 
     @cached("defi_aggregation_overview", ttl=config.CACHE_TTL_DEFI_RATES)
-    async def get_overview(self) -> dict[str, Any]:
+    async def get_overview(self) -> Dict[str, Any]:
         """Return a unified DeFi market snapshot."""
         prices, yields = await asyncio.gather(
             self.get_realtime_prices(),
@@ -62,13 +62,13 @@ class DeFiAggregationService:
     @cached("defi_aggregation_prices", ttl=config.CACHE_TTL_TOKEN_PRICE)
     async def get_realtime_prices(
         self,
-        tokens: dict[str, str] | None = None,
-    ) -> dict[str, dict[str, Any]]:
+        tokens: Optional[Dict[str, str]] = None,
+    ) -> Dict[str, Dict[str, Any]]:
         """Fetch real-time USD prices from Jupiter Price API."""
         token_map = tokens or DEFAULT_PRICE_TOKENS
         prices = await self._jupiter.batch_get_token_prices(list(token_map.values()))
 
-        result: dict[str, dict[str, Any]] = {}
+        result: Dict[str, Dict[str, Any]] = {}
         for symbol, mint in token_map.items():
             price = prices.get(mint)
             result[symbol] = {
@@ -81,7 +81,7 @@ class DeFiAggregationService:
         return result
 
     @cached("defi_aggregation_yields", ttl=config.CACHE_TTL_DEFI_RATES)
-    async def get_protocol_yields(self) -> dict[str, Any]:
+    async def get_protocol_yields(self) -> Dict[str, Any]:
         """Aggregate protocol APY/TVL data from supported providers."""
         marginfi_result, raydium_result = await asyncio.gather(
             self._get_marginfi_yields(),
@@ -89,8 +89,8 @@ class DeFiAggregationService:
             return_exceptions=True,
         )
 
-        protocols: dict[str, Any] = {}
-        errors: dict[str, str] = {}
+        protocols: Dict[str, Any] = {}
+        errors: Dict[str, str] = {}
 
         if isinstance(marginfi_result, Exception):
             errors["marginfi"] = str(marginfi_result)
@@ -111,7 +111,7 @@ class DeFiAggregationService:
             "errors": errors,
         }
 
-    async def warm_cache(self) -> dict[str, Any]:
+    async def warm_cache(self) -> Dict[str, Any]:
         """Refresh the main aggregation paths and return cache stats."""
         overview = await self.get_overview()
         return {
@@ -120,7 +120,7 @@ class DeFiAggregationService:
             "cache": get_cache().stats,
         }
 
-    async def _get_marginfi_yields(self) -> dict[str, Any]:
+    async def _get_marginfi_yields(self) -> Dict[str, Any]:
         pools = await self._marginfi.get_lending_pools()
         normalized = []
         for pool in pools:
@@ -137,7 +137,7 @@ class DeFiAggregationService:
             "pools": normalized,
         }
 
-    async def _get_raydium_yields(self) -> dict[str, Any]:
+    async def _get_raydium_yields(self) -> Dict[str, Any]:
         pools = await self._raydium.get_pool_list(page_size=25)
         normalized = []
 
@@ -180,7 +180,7 @@ class DeFiAggregationService:
         }
 
     @staticmethod
-    def _rank_opportunities(protocols: dict[str, Any], limit: int = 10) -> list[dict[str, Any]]:
+    def _rank_opportunities(protocols: Dict[str, Any], limit: int = 10) -> List[Dict[str, Any]]:
         opportunities = []
         for protocol, data in protocols.items():
             for pool in data.get("pools", []):

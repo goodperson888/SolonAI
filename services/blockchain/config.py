@@ -5,6 +5,7 @@ Solana RPC 模块配置
 """
 
 import os
+from typing import Dict, List
 
 from dotenv import load_dotenv
 
@@ -18,7 +19,7 @@ class SolanaConfig:
     NETWORK: str = os.getenv("SOLANA_NETWORK", "devnet")
 
     # ---- RPC 端点（按优先级排列） ----
-    RPC_ENDPOINTS: list[str] = [
+    RPC_ENDPOINTS: List[str] = [
         url.strip()
         for url in os.getenv(
             "SOLANA_RPC_URLS",
@@ -55,21 +56,21 @@ class SolanaConfig:
     WRAPPED_SOL_MINT: str = "So11111111111111111111111111111111111111112"
 
     # Mainnet 代币
-    MAINNET_TOKENS: dict[str, str] = {
+    MAINNET_TOKENS: Dict[str, str] = {
         "SOL": "So11111111111111111111111111111111111111112",
         "USDC": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
         "USDT": "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
     }
 
     # Devnet 代币
-    DEVNET_TOKENS: dict[str, str] = {
+    DEVNET_TOKENS: Dict[str, str] = {
         "SOL": "So11111111111111111111111111111111111111112",
         "USDC": "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
         "USDT": "EJwZgeZrdC8TXTQbQBoL6bfuAnFUUy1PVCMB4DYPzVaS",
     }
 
     @classmethod
-    def get_tokens(cls) -> dict[str, str]:
+    def get_tokens(cls) -> Dict[str, str]:
         """根据当前网络返回代币地址映射"""
         if cls.NETWORK == "devnet":
             return cls.DEVNET_TOKENS

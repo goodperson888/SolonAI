@@ -10,7 +10,7 @@
 
 import asyncio
 import logging
-from typing import Any
+from typing import Any, Dict, List, Optional
 
 from solana.rpc.async_api import AsyncClient
 from solana.rpc.commitment import Confirmed, Finalized
@@ -41,10 +41,10 @@ def _validate_address(address: str) -> Pubkey:
 class EnhancedRPCClient:
     """增强版 Solana RPC 客户端，支持多端点和自动重试"""
 
-    def __init__(self, rpc_urls: list[str] | None = None):
+    def __init__(self, rpc_urls: Optional[List[str]] = None):
         self.rpc_urls = rpc_urls or config.RPC_ENDPOINTS
         self._current_index = 0
-        self._clients: dict[str, AsyncClient] = {}
+        self._clients: Dict[str, AsyncClient] = {}
         self._max_retries = config.RPC_MAX_RETRIES
         self._retry_delay = config.RPC_RETRY_DELAY
         self._timeout = config.RPC_TIMEOUT
@@ -114,7 +114,7 @@ class EnhancedRPCClient:
 
         return await self._execute_with_retry("get_balance", _call)
 
-    async def get_token_accounts_parsed(self, address: str) -> list[dict[str, Any]]:
+    async def get_token_accounts_parsed(self, address: str) -> List[Dict[str, Any]]:
         """
         获取钱包所有 SPL Token 账户（解析后）
 
@@ -152,7 +152,7 @@ class EnhancedRPCClient:
 
         return await self._execute_with_retry("get_token_accounts", _call)
 
-    async def get_transaction(self, signature_str: str) -> dict[str, Any] | None:
+    async def get_transaction(self, signature_str: str) -> Optional[Dict[str, Any]]:
         """获取交易详情"""
         sig = Signature.from_string(signature_str)
 
@@ -175,9 +175,9 @@ class EnhancedRPCClient:
         self,
         address: str,
         limit: int = 20,
-        before: str | None = None,
-        until: str | None = None,
-    ) -> list[dict[str, Any]]:
+        before: Optional[str] = None,
+        until: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
         """获取地址的链上交易签名历史。"""
         pubkey = _validate_address(address)
         before_sig = Signature.from_string(before) if before else None
@@ -208,7 +208,7 @@ class EnhancedRPCClient:
 
         return await self._execute_with_retry("get_transaction_history", _call)
 
-    async def get_signature_status(self, signature_str: str) -> dict[str, Any] | None:
+    async def get_signature_status(self, signature_str: str) -> Optional[Dict[str, Any]]:
         """查询交易签名状态，支持 pending/confirmed/finalized/failed 判断。"""
         sig = Signature.from_string(signature_str)
 
@@ -241,7 +241,7 @@ class EnhancedRPCClient:
 
         return await self._execute_with_retry("get_latest_blockhash", _call)
 
-    async def estimate_fee_for_transaction(self, transaction_base64: str) -> dict[str, Any]:
+    async def estimate_fee_for_transaction(self, transaction_base64: str) -> Dict[str, Any]:
         """Estimate network fee for a serialized transaction message."""
         import base64
 
@@ -256,7 +256,7 @@ class EnhancedRPCClient:
 
         return await self._execute_with_retry("estimate_fee_for_transaction", _call)
 
-    async def simulate_transaction(self, transaction_base64: str) -> dict[str, Any]:
+    async def simulate_transaction(self, transaction_base64: str) -> Dict[str, Any]:
         """Simulate a serialized transaction without signature verification."""
         import base64
 

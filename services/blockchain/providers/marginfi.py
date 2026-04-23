@@ -14,6 +14,7 @@ MarginFi v2 — Solana 上的借贷协议
 
 import logging
 from decimal import Decimal
+from typing import List, Optional
 
 from solders.pubkey import Pubkey
 
@@ -132,7 +133,7 @@ class UserPosition:
         mint: str,
         position_type: str,  # "deposit" or "borrow"
         amount: Decimal = DEFAULT_DECIMAL_ZERO,
-        value_usd: Decimal | None = None,
+        value_usd: Optional[Decimal] = None,
     ):
         self.symbol = symbol
         self.mint = mint
@@ -166,7 +167,7 @@ class MarginFiProvider(BaseDeFiProvider):
     def protocol_name(self) -> str:
         return "marginfi"
 
-    def __init__(self, rpc_client: EnhancedRPCClient | None = None):
+    def __init__(self, rpc_client: Optional[EnhancedRPCClient] = None):
         self._rpc = rpc_client or EnhancedRPCClient()
         self._owns_rpc = rpc_client is None
         # 使用带重试的 HTTP 客户端
@@ -176,7 +177,7 @@ class MarginFiProvider(BaseDeFiProvider):
         self._mainnet_rpc_url = MAINNET_RPC
 
     @cached("marginfi_pools", ttl=config.CACHE_TTL_DEFI_RATES)
-    async def get_lending_pools(self) -> list[LendingPool]:
+    async def get_lending_pools(self) -> List[LendingPool]:
         """
         获取所有借贷池信息（利率、TVL 等）
 
@@ -235,7 +236,7 @@ class MarginFiProvider(BaseDeFiProvider):
         logger.info(f"MarginFi: 使用已知 bank 列表 ({len(pools)} 个池)")
         return pools
 
-    async def _fetch_pools_from_chain(self) -> list[LendingPool]:
+    async def _fetch_pools_from_chain(self) -> List[LendingPool]:
         """通过 JSON-RPC 直接从 Mainnet 读取 Bank 账户数据"""
         import base64
 
@@ -263,7 +264,7 @@ class MarginFiProvider(BaseDeFiProvider):
 
         return pools
 
-    def _parse_bank_data(self, data: bytes, symbol: str, bank_info: dict) -> LendingPool | None:
+    def _parse_bank_data(self, data: bytes, symbol: str, bank_info: dict) -> Optional[LendingPool]:
         """
         解析 Bank 账户二进制数据 (已通过链上数据验证偏移量)
 
@@ -344,7 +345,7 @@ class MarginFiProvider(BaseDeFiProvider):
         value = int.from_bytes(data, byteorder="little", signed=True)
         return value / (2**48)
 
-    async def _fetch_pools_from_defillama(self) -> list[LendingPool]:
+    async def _fetch_pools_from_defillama(self) -> List[LendingPool]:
         """
         从 DeFiLlama Yields API 获取 MarginFi 利率数据
 
@@ -393,7 +394,7 @@ class MarginFiProvider(BaseDeFiProvider):
 
         return pools
 
-    async def get_user_positions(self, user_address: str) -> list[UserPosition]:
+    async def get_user_positions(self, user_address: str) -> List[UserPosition]:
         """
         获取用户在 MarginFi 的所有仓位
 
@@ -444,7 +445,7 @@ class MarginFiProvider(BaseDeFiProvider):
             logger.warning(f"MarginFi: 获取用户仓位失败: {e}")
             return []
 
-    def _parse_marginfi_account(self, data: bytes) -> list[UserPosition]:
+    def _parse_marginfi_account(self, data: bytes) -> List[UserPosition]:
         """
         解析 MarginfiAccount 数据
 

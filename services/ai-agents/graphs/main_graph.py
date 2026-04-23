@@ -314,6 +314,26 @@ def create_workflow():
 # ===== 对外暴露的接口 =====
 
 _workflow = None
+_agent_pool = None
+
+
+def get_agent_pool():
+    """获取 Agent 实例池（单例模式，避免重复创建）"""
+    global _agent_pool
+    if _agent_pool is None:
+        llm = create_llm()
+        _agent_pool = {
+            "intent": IntentAgent(llm),
+            "data": DataAggregationAgent(llm),
+            "strategy": StrategyAgent(llm),
+            "risk": RiskAgent(llm),
+            "validation": ValidationAgent(llm),
+            "execution": ExecutionAgent(llm),
+            "monitoring": MonitoringAgent(llm),
+            "explanation": ExplanationAgent(llm),
+        }
+        logger.info("[AgentPool] Agent 实例池初始化完成")
+    return _agent_pool
 
 
 def get_workflow():
@@ -438,6 +458,7 @@ async def run_agent_stream(
     session_id: str = "",
     chat_history: list = None,
     thread_id: str = None,
+    rag_context: str = "",
 ):
     """
     运行 Agent 工作流（流式输出版本）
@@ -462,50 +483,154 @@ async def run_agent_stream(
     tid = thread_id or str(uuid.uuid4())
 
     initial_state = _build_initial_state(user_input, wallet_address, session_id, chat_history)
+    if rag_context:
+        initial_state["rag_context"] = rag_context
 
     try:
         logger.info(f"[MainGraph] 开始流式执行工作流: thread_id={tid}")
 
-        # 创建临时的 LLM 和 Agent 实例用于流式输出
-        llm = create_llm()
-        explanation_agent = ExplanationAgent(llm)
+        # 使用 Agent 实例池（避免重复创建）
+        agents = get_agent_pool()
 
         # 步骤1: 运行 IntentAgent
-        intent_agent = IntentAgent(llm)
-        state = await intent_agent.process(initial_state)
+        yield {
+            "type": "agent_status",
+            "agent": "intent",
+            "status": "running",
+            "message": "理解你的问题",
+        }
+        state = await agents["intent"].process(initial_state)
+        yield {"type": "agent_status", "agent": "intent", "status": "done", "message": "已识别意图"}
 
         # 检查是否有错误
         if state.get("fallback_mode"):
             yield {"type": "error", "error": state.get("error_message", "处理失败")}
             return
 
-        # 步骤2: 运行 DataAggregationAgent
-        data_agent = DataAggregationAgent(llm)
-        state = await data_agent.process(state)
-
-        # 步骤3: 根据 intent 决定是否需要运行其他 Agent
+        # 获取意图，判断是否可以走快速路径
         intent = state.get("intent", "chat")
 
+        # 快速路径：纯聊天且未连接钱包，跳过 DataAggregation
+        if intent == "chat" and not state.get("wallet_address"):
+            logger.info("[MainGraph] 纯聊天模式，跳过数据获取，直接生成回复")
+            yield {
+                "type": "agent_status",
+                "agent": "explanation",
+                "status": "running",
+                "message": "生成回复",
+            }
+            async for token in agents["explanation"].process_stream(state):
+                if isinstance(token, str):
+                    yield {"type": "token", "content": token}
+            yield {
+                "type": "agent_status",
+                "agent": "explanation",
+                "status": "done",
+                "message": "回复完成",
+            }
+
+            # 发送附加数据
+            yield {
+                "type": "data",
+                "data": {
+                    "intent": "chat",
+                    "intent_params": {},
+                    "wallet_assets": [],
+                    "total_value_usd": 0,
+                    "rag_sources": state.get("rag_sources", []),
+                },
+            }
+            yield {"type": "complete"}
+            return
+
+        # 步骤2: 运行 DataAggregationAgent
+        yield {
+            "type": "agent_status",
+            "agent": "data",
+            "status": "running",
+            "message": "获取相关数据",
+        }
+        state = await agents["data"].process(state)
+        yield {"type": "agent_status", "agent": "data", "status": "done", "message": "数据获取完成"}
+
+        # 步骤3: 根据 intent 决定是否需要运行其他 Agent
         if intent == "generate_strategy":
             # 策略生成流程：strategy -> risk -> validation
-            strategy_agent = StrategyAgent(llm)
-            state = await strategy_agent.process(state)
+            yield {
+                "type": "agent_status",
+                "agent": "strategy",
+                "status": "running",
+                "message": "生成投资策略",
+            }
+            state = await agents["strategy"].process(state)
+            yield {
+                "type": "agent_status",
+                "agent": "strategy",
+                "status": "done",
+                "message": "策略生成完成",
+            }
 
-            risk_agent = RiskAgent(llm)
-            state = await risk_agent.process(state)
+            yield {
+                "type": "agent_status",
+                "agent": "risk",
+                "status": "running",
+                "message": "评估风险",
+            }
+            state = await agents["risk"].process(state)
+            yield {
+                "type": "agent_status",
+                "agent": "risk",
+                "status": "done",
+                "message": "风险评估完成",
+            }
 
-            validation_agent = ValidationAgent(llm)
-            state = await validation_agent.process(state)
+            yield {
+                "type": "agent_status",
+                "agent": "validation",
+                "status": "running",
+                "message": "验证策略",
+            }
+            state = await agents["validation"].process(state)
+            yield {
+                "type": "agent_status",
+                "agent": "validation",
+                "status": "done",
+                "message": "验证完成",
+            }
 
         elif intent == "risk_check":
             # 风控检查流程
-            risk_agent = RiskAgent(llm)
-            state = await risk_agent.process(state)
+            yield {
+                "type": "agent_status",
+                "agent": "risk",
+                "status": "running",
+                "message": "检查风险",
+            }
+            state = await agents["risk"].process(state)
+            yield {
+                "type": "agent_status",
+                "agent": "risk",
+                "status": "done",
+                "message": "风险检查完成",
+            }
 
         # 步骤4: 使用 ExplanationAgent 的流式方法生成最终回复
+        yield {
+            "type": "agent_status",
+            "agent": "explanation",
+            "status": "running",
+            "message": "生成回复",
+        }
         logger.info("[MainGraph] 开始流式生成回复")
-        async for token in explanation_agent.process_stream(state):
-            yield {"type": "token", "content": token}
+        async for token in agents["explanation"].process_stream(state):
+            if isinstance(token, str):
+                yield {"type": "token", "content": token}
+        yield {
+            "type": "agent_status",
+            "agent": "explanation",
+            "status": "done",
+            "message": "回复完成",
+        }
 
         # 发送附加数据
         yield {
@@ -515,6 +640,7 @@ async def run_agent_stream(
                 "intent_params": state.get("intent_params", {}),
                 "wallet_assets": state.get("wallet_assets", []),
                 "total_value_usd": state.get("total_value_usd", 0),
+                "rag_sources": state.get("rag_sources", []),
             },
         }
 
@@ -607,7 +733,7 @@ async def get_agent_state(thread_id: str) -> Dict[str, Any]:
 
     Returns:
         当前状态快照，包含：
-        - values: 当前���态值
+        - values: 当前状态值
         - next: 下一个待执行的节点列表（空表示已完成）
         - interrupted: 是否处于中断状态
     """

@@ -9,6 +9,7 @@ import json
 from typing import Any, Dict
 
 from base_agent import BaseAgent
+from prompts import get_prompt
 
 
 class StrategyAgent(BaseAgent):
@@ -17,47 +18,11 @@ class StrategyAgent(BaseAgent):
 
     @property
     def system_prompt(self) -> str:
-        return """你是 Solana DeFi 策略专家。根据用户的风险偏好、资金规模和链上数据，生成安全可落地的投资策略。
+        """从文件加载 system prompt"""
+        return get_prompt("strategy_agent", language="zh", version="v1")
 
-## 可用协议
-
-- MarginFi（借贷）：存款年化 3-8%，风险极低，已审计
-- Raydium（DEX/流动性挖矿）：年化 8-25%，风险中低
-- Jupiter（聚合交易）：最优价格的代币交换
-- Orca（DEX）：年化 5-22%，风险低
-- Kamino（质押）：年化 5-12%，风险低
-
-## 风险等级映射
-
-- conservative（保守）：只推荐借贷和质押，年化 3-8%
-- moderate（稳健）：可以包含流动性挖矿，年化 8-15%
-- aggressive（进取）：可以包含高收益池，年化 15%+
-
-## 返回 JSON 格式
-
-```json
-{
-  "strategy_name": "策略名称",
-  "risk_level": "conservative/moderate/aggressive",
-  "expected_apy": 8.2,
-  "protocols": ["MarginFi", "Raydium"],
-  "steps": [
-    {
-      "step": 1,
-      "action": "deposit",
-      "protocol": "MarginFi",
-      "token": "USDC",
-      "amount": 5000,
-      "expected_apy": 8.2,
-      "description": "将5000 USDC存入MarginFi赚取利息"
-    }
-  ],
-  "risk_warnings": ["无常损失风险", "协议合约风险"],
-  "total_investment": 5000,
-  "estimated_daily_income": 1.12,
-  "estimated_monthly_income": 33.7
-}
-```"""
+    # 原 prompt 已移至 prompts/strategy_agent_zh_v1.txt
+    # 如需修改 prompt，请编辑该文件
 
     async def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """生成投资策略"""

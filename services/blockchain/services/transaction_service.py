@@ -5,6 +5,7 @@
 """
 
 import logging
+from typing import List, Optional, Union
 
 from ..exceptions import ProviderError, QuoteError
 from ..models.transaction import SwapQuote, TransactionResult, TransactionStatus
@@ -21,9 +22,9 @@ class TransactionService:
 
     def __init__(
         self,
-        rpc_client: EnhancedRPCClient | None = None,
-        jupiter: JupiterProvider | None = None,
-        raydium: RaydiumProvider | None = None,
+        rpc_client: Optional[EnhancedRPCClient] = None,
+        jupiter: Optional[JupiterProvider] = None,
+        raydium: Optional[RaydiumProvider] = None,
     ):
         self._rpc = rpc_client or EnhancedRPCClient()
         self._jupiter = jupiter or JupiterProvider()
@@ -70,8 +71,8 @@ class TransactionService:
         """聚合多个协议报价，返回最优"""
         import asyncio
 
-        quotes: list[SwapQuote] = []
-        errors: list[str] = []
+        quotes: List[SwapQuote] = []
+        errors: List[str] = []
 
         # 并发获取报价
         tasks = [
@@ -97,7 +98,7 @@ class TransactionService:
         return best
 
     @staticmethod
-    async def _safe_get_quote(provider, *args) -> SwapQuote | str:
+    async def _safe_get_quote(provider, *args) -> Union[SwapQuote, str]:
         """安全获取报价，失败返回错误信息"""
         try:
             return await provider.get_swap_quote(*args)
@@ -186,14 +187,14 @@ class TransactionService:
 
     async def pack_batch_transactions(
         self,
-        instructions: list[dict],
+        instructions: List[dict],
         payer: str,
-        recent_blockhash: str | None = None,
+        recent_blockhash: Optional[str] = None,
         max_instructions_per_tx: int = 8,
         max_tx_size_bytes: int = 1232,
-        compute_unit_limit: int | None = None,
-        compute_unit_price_micro_lamports: int | None = None,
-    ) -> list[dict]:
+        compute_unit_limit: Optional[int] = None,
+        compute_unit_price_micro_lamports: Optional[int] = None,
+    ) -> List[dict]:
         """将多条指令按大小和数量打包为多笔未签名 v0 交易。"""
         blockhash = recent_blockhash or await self._rpc.get_latest_blockhash()
         parsed_instructions = [
@@ -224,9 +225,9 @@ class TransactionService:
         self,
         wallet_address: str,
         limit: int = 20,
-        before: str | None = None,
-        until: str | None = None,
-    ) -> list[dict]:
+        before: Optional[str] = None,
+        until: Optional[str] = None,
+    ) -> List[dict]:
         """查询钱包链上交易签名历史。"""
         safe_limit = max(1, min(limit, 100))
         return await self._rpc.get_transaction_history(

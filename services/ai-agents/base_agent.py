@@ -4,11 +4,13 @@ Solon AI - Agent 基类
 所有 Agent 都继承这个基类，统一接口和错误处理。
 """
 
+import hashlib
 import json
 import logging
 import re
+import time
 from abc import ABC, abstractmethod
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from error_handler import ErrorSeverity, LLMError, error_handler, llm_circuit_breaker
 from langchain_openai import ChatOpenAI
@@ -36,6 +38,9 @@ class BaseAgent(ABC):
     def __init__(self, llm: ChatOpenAI):
         self.llm = llm
         self.prompt = self._build_prompt()
+        # 简单内存缓存（生产环境建议用 Redis）
+        self._cache: Dict[str, tuple[Any, float]] = {}
+        self._cache_ttl = 300  # 缓存 5 分钟
 
     @property
     @abstractmethod
@@ -46,6 +51,62 @@ class BaseAgent(ABC):
     def _build_prompt(self):
         """Provide a sensible default so simple agents need only define `system_prompt`."""
         return self.system_prompt
+
+    def _get_cache_key(self, user_input: str, state: Dict[str, Any]) -> str:
+        """生成缓存键"""
+        # 对于相同的输入和钱包地址，可以复用结果
+        key_data = f"{self.name}:{user_input}:{state.get('wallet_address', '')}"
+        return hashlib.md5(key_data.encode()).hexdigest()
+
+    def _get_cached_result(self, cache_key: str) -> Optional[Any]:
+        """获取缓存结果"""
+        if cache_key in self._cache:
+            result, timestamp = self._cache[cache_key]
+            if time.time() - timestamp < self._cache_ttl:
+                logger.info(f"[{self.name}] 使用缓存结果")
+                return result
+            else:
+                # 过期，删除
+                del self._cache[cache_key]
+        return None
+
+    def _set_cached_result(self, cache_key: str, result: Any):
+        """保存缓存结果"""
+        self._cache[cache_key] = (result, time.time())
+        # 简单的缓存清理：超过 100 条时清理过期的
+        if len(self._cache) > 100:
+            now = time.time()
+            expired_keys = [k for k, (_, ts) in self._cache.items() if now - ts > self._cache_ttl]
+            for k in expired_keys:
+                del self._cache[k]
+
+    def _compress_chat_history(self, chat_history: list) -> list:
+        """
+        压缩对话历史，避免上下文过长
+
+        策略：
+        - 保留最近 5 条完整对话
+        - 早期对话进行摘要（简化为关键信息）
+        """
+        if not chat_history or len(chat_history) <= 10:
+            return chat_history or []
+
+        # 保留最近 5 轮对话（10 条消息）
+        recent = chat_history[-10:]
+
+        # 早期对话简化为摘要
+        early = chat_history[:-10]
+        if early:
+            # 简单摘要：只保留用户的关键问题
+            summary = []
+            for i in range(0, len(early), 2):  # 每 2 条取 1 条
+                if i < len(early) and early[i].get("role") == "user":
+                    summary.append(early[i])
+
+            logger.info(f"[{self.name}] 压缩历史：{len(early)} 条 -> {len(summary)} 条摘要")
+            return summary + recent
+
+        return recent
 
     @staticmethod
     def _normalize_llm_response(response: Any) -> Dict[str, str]:
@@ -85,7 +146,7 @@ class BaseAgent(ABC):
 
     async def call_llm(self, user_input: str, chat_history: list = None) -> str:
         """
-        调用大模型（带熔断器保护）
+        调用大模型（带熔断器保护和历史压缩）
 
         Args:
             user_input: 用户输入
@@ -106,13 +167,16 @@ class BaseAgent(ABC):
 
         try:
             messages = [SystemMessage(content=self.system_prompt)]
-            # 添加对话历史
+
+            # 压缩对话历史（避免上下文过长）
             if chat_history:
-                for msg in chat_history[-10:]:  # 最多10条历史
+                compressed_history = self._compress_chat_history(chat_history)
+                for msg in compressed_history:
                     if msg["role"] == "user":
                         messages.append(HumanMessage(content=msg["content"]))
                     else:
                         messages.append(AIMessage(content=msg["content"]))
+
             messages.append(HumanMessage(content=user_input))
             response = await self.llm.ainvoke(messages)
             normalized = self._normalize_llm_response(response)
@@ -134,7 +198,7 @@ class BaseAgent(ABC):
     async def call_llm_with_metadata(
         self, user_input: str, chat_history: list = None
     ) -> Dict[str, str]:
-        """调用大模型并返回文本和推理过程（带熔断器保护）"""
+        """调用大模型并返回文本和推理过程（带熔断器保护和历史压缩）"""
         from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
         # 检查熔断器
@@ -147,12 +211,16 @@ class BaseAgent(ABC):
 
         try:
             messages = [SystemMessage(content=self.system_prompt)]
+
+            # 压缩对话历史
             if chat_history:
-                for msg in chat_history[-10:]:
+                compressed_history = self._compress_chat_history(chat_history)
+                for msg in compressed_history:
                     if msg["role"] == "user":
                         messages.append(HumanMessage(content=msg["content"]))
                     else:
                         messages.append(AIMessage(content=msg["content"]))
+
             messages.append(HumanMessage(content=user_input))
             response = await self.llm.ainvoke(messages)
 
@@ -172,7 +240,7 @@ class BaseAgent(ABC):
 
     async def call_llm_stream(self, user_input: str, chat_history: list = None):
         """
-        流式调用大模型（带熔断器保护）
+        流式调用大模型（带熔断器保护和历史压缩）
 
         Args:
             user_input: 用户输入
@@ -193,12 +261,16 @@ class BaseAgent(ABC):
 
         try:
             messages = [SystemMessage(content=self.system_prompt)]
+
+            # 压缩对话历史
             if chat_history:
-                for msg in chat_history[-10:]:
+                compressed_history = self._compress_chat_history(chat_history)
+                for msg in compressed_history:
                     if msg["role"] == "user":
                         messages.append(HumanMessage(content=msg["content"]))
                     else:
                         messages.append(AIMessage(content=msg["content"]))
+
             messages.append(HumanMessage(content=user_input))
 
             # 使用 astream 进行流式调用

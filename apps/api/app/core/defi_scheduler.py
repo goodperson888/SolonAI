@@ -10,6 +10,7 @@ import asyncio
 import logging
 import os
 import sys
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +19,7 @@ project_root = os.path.abspath(os.path.join(current_dir, "..", "..", "..", "..")
 services_path = os.path.join(project_root, "services")
 sys.path.insert(0, services_path)
 
-_refresh_task: asyncio.Task | None = None
+_refresh_task: Optional[asyncio.Task] = None
 
 
 async def _refresh_once() -> None:

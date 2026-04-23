@@ -8,6 +8,8 @@ Solana RPC 模块 — 自定义异常体系
 - 业务逻辑（余额不足 / 无效地址）
 """
 
+from typing import List, Optional
+
 
 class SolanaRPCError(Exception):
     """RPC 模块基础异常"""
@@ -67,7 +69,7 @@ class TransactionSendError(SolanaRPCError):
 class TransactionSimulationError(SolanaRPCError):
     """交易模拟失败（预执行不通过）"""
 
-    def __init__(self, detail: str = "", logs: list[str] | None = None):
+    def __init__(self, detail: str = "", logs: Optional[List[str]] = None):
         super().__init__("交易模拟失败", detail)
         self.logs = logs or []
 

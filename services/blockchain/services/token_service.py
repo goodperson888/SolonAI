@@ -6,6 +6,7 @@
 
 import logging
 from decimal import Decimal
+from typing import Optional
 
 from ..models.token import TokenPrice
 from ..providers.jupiter import JupiterProvider
@@ -16,11 +17,13 @@ logger = logging.getLogger(__name__)
 class TokenService:
     """代币信息与价格服务"""
 
-    def __init__(self, jupiter: JupiterProvider | None = None):
+    def __init__(self, jupiter: Optional[JupiterProvider] = None):
         self._jupiter = jupiter or JupiterProvider()
         self._owns_client = jupiter is None
 
-    async def get_token_price(self, mint: str, symbol: str | None = None) -> TokenPrice | None:
+    async def get_token_price(
+        self, mint: str, symbol: Optional[str] = None
+    ) -> Optional[TokenPrice]:
         """
         获取单个代币价格
 
@@ -61,7 +64,7 @@ class TokenService:
 
         return result
 
-    async def get_sol_price(self) -> Decimal | None:
+    async def get_sol_price(self) -> Optional[Decimal]:
         """获取 SOL/USD 价格"""
         from ..config import config
 

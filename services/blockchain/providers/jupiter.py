@@ -9,6 +9,7 @@ Jupiter Aggregator 协议适配器
 
 import logging
 from decimal import Decimal
+from typing import Dict, List, Optional
 
 import httpx
 
@@ -153,7 +154,7 @@ class JupiterProvider(BaseDeFiProvider):
             raise ProviderError("jupiter", f"交易构建失败: {e}")
 
     @cached("jupiter_price", ttl=config.CACHE_TTL_TOKEN_PRICE)
-    async def get_token_price(self, mint: str) -> Decimal | None:
+    async def get_token_price(self, mint: str) -> Optional[Decimal]:
         """
         通过 Jupiter Price API 获取代币 USD 价格
 
@@ -183,7 +184,7 @@ class JupiterProvider(BaseDeFiProvider):
             return None
 
     @cached("jupiter_batch_price", ttl=config.CACHE_TTL_TOKEN_PRICE)
-    async def batch_get_token_prices(self, mints: list[str]) -> dict[str, Decimal]:
+    async def batch_get_token_prices(self, mints: List[str]) -> Dict[str, Decimal]:
         """
         批量获取代币价格
 

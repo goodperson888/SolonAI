@@ -10,7 +10,7 @@ Provides non-custodial transaction utilities:
 import os
 import sys
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -66,7 +66,7 @@ class BatchInstructionRequest(BaseModel):
     """Batch instruction packing request."""
 
     payer: str = Field(..., description="Fee payer public key")
-    instructions: list[dict] = Field(default_factory=list, description="Instruction payloads")
+    instructions: List[dict] = Field(default_factory=list, description="Instruction payloads")
     recent_blockhash: Optional[str] = Field(default=None, description="Optional recent blockhash")
     max_instructions_per_tx: int = Field(default=8, ge=1, le=32)
     max_tx_size_bytes: int = Field(default=1232, ge=256, le=1232)
@@ -83,7 +83,7 @@ class TransactionStatusResponse(BaseModel):
     error: Optional[str] = None
 
 
-@router.get("/history/{wallet_address}", response_model=list[TransactionHistoryItem])
+@router.get("/history/{wallet_address}", response_model=List[TransactionHistoryItem])
 async def get_transaction_history(
     wallet_address: str,
     limit: int = Query(default=20, ge=1, le=100),

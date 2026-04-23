@@ -81,7 +81,8 @@ export default function RiskControlPage() {
     { id: 'transactions' as TabType, name: '交易历史' },
   ]
 
-  const getRiskLevelColor = (level: string) => {
+  const getRiskLevelColor = (level: string | undefined) => {
+    if (!level) return 'text-gray-400'
     switch (level.toLowerCase()) {
       case 'low':
         return 'text-green-400'
@@ -95,7 +96,8 @@ export default function RiskControlPage() {
     }
   }
 
-  const getRiskLevelBg = (level: string) => {
+  const getRiskLevelBg = (level: string | undefined) => {
+    if (!level) return 'bg-gray-500/20 text-gray-400'
     switch (level.toLowerCase()) {
       case 'low':
         return 'bg-green-500/20 text-green-400'
@@ -190,7 +192,7 @@ export default function RiskControlPage() {
                   <span className="text-2xl">ℹ️</span>
                 </div>
                 <p className="text-3xl font-bold text-blue-400">
-                  {assessment.recommendations.length}
+                  {assessment.recommendations?.length || 0}
                 </p>
               </Card>
             </div>

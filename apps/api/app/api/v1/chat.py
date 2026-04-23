@@ -6,6 +6,7 @@ AI 对话 API
 """
 
 import json
+import logging
 import os
 import sys
 import uuid
@@ -15,7 +16,9 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from sqlalchemy import desc, select
+
+logger = logging.getLogger(__name__)
+from sqlalchemy import delete, desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # 添加 AI 服务路径
@@ -343,26 +346,112 @@ async def send_message_stream(
     async def event_generator():
         try:
             wallet_address = request.wallet_address.strip() if request.wallet_address else ""
-            user_key = wallet_address or f"guest:{session_id}"
-            user = await get_or_create_user(db, user_key)
-            chat_session = await get_or_create_session(db, user, session_id, request.message)
 
-            await save_chat_message(db, chat_session, MessageRole.USER, request.message)
+            # 只有登录用户才保存到数据库
+            chat_history = []
+            user = None
+            chat_session = None
 
-            # 查询对话历史
-            history_result = await db.execute(
-                select(ChatMessage)
-                .where(ChatMessage.session_id == chat_session.id)
-                .order_by(desc(ChatMessage.created_at))
-                .limit(20)
-            )
-            history_messages = list(reversed(history_result.scalars().all()))
-            chat_history = [
-                {"role": m.role.value, "content": m.content} for m in history_messages[:-1]
-            ]
+            if wallet_address:
+                user_key = wallet_address
+                user = await get_or_create_user(db, user_key)
+                chat_session = await get_or_create_session(db, user, session_id, request.message)
+                await save_chat_message(db, chat_session, MessageRole.USER, request.message)
+
+                # 查询对话历史
+                history_result = await db.execute(
+                    select(ChatMessage)
+                    .where(ChatMessage.session_id == chat_session.id)
+                    .order_by(desc(ChatMessage.created_at))
+                    .limit(20)
+                )
+                history_messages = list(reversed(history_result.scalars().all()))
+                chat_history = [
+                    {"role": m.role.value, "content": m.content} for m in history_messages[:-1]
+                ]
 
             # 发送 session_id
             yield f"event: session\ndata: {json.dumps({'session_id': session_id})}\n\n"
+
+            # 在 API 层直接做知识库检索（避免 Agent 自调用 HTTP 死锁）
+            rag_context = ""
+            rag_sources = []
+            if wallet_address:
+                try:
+                    from app.models.knowledge import KnowledgeChunk, KnowledgeDocument
+
+                    doc_result = await db.execute(
+                        select(KnowledgeDocument).where(KnowledgeDocument.user_id == wallet_address)
+                    )
+                    docs = doc_result.scalars().all()
+                    if docs:
+                        doc_ids = [doc.id for doc in docs]
+                        chunk_result = await db.execute(
+                            select(KnowledgeChunk).where(KnowledgeChunk.document_id.in_(doc_ids))
+                        )
+                        chunks = chunk_result.scalars().all()
+                        if chunks:
+                            import re as re_mod
+
+                            query_lower = request.message.lower()
+                            en_kw = [
+                                w
+                                for w in query_lower.split()
+                                if any(c.isascii() and c.isalpha() for c in w) and len(w) >= 2
+                            ]
+                            cn_segs = re_mod.findall(r"[\u4e00-\u9fff]+", query_lower)
+                            cn_kw = []
+                            for seg in cn_segs:
+                                if len(seg) >= 2:
+                                    cn_kw.append(seg)  # 完整片段
+                                if len(seg) >= 3:
+                                    cn_kw.extend(seg[i : i + 3] for i in range(len(seg) - 2))
+                            cn_kw = list(set(cn_kw))
+                            all_kw = en_kw + cn_kw
+                            if not all_kw:
+                                pass  # 无有效关键词，跳过
+                            else:
+                                # 计算最大可能分数用于归一化
+                                max_possible = sum(len(kw) for kw in all_kw)
+                                scored = []
+                                for chunk in chunks:
+                                    cl = chunk.content.lower()
+                                    score = sum(len(kw) for kw in all_kw if kw in cl)
+                                    # 要求至少匹配 30% 的关键词权重
+                                    if score >= max(max_possible * 0.3, 6):
+                                        doc = next(
+                                            (d for d in docs if d.id == chunk.document_id),
+                                            None,
+                                        )
+                                        scored.append(
+                                            {
+                                                "content": chunk.content,
+                                                "filename": doc.filename if doc else "",
+                                                "score": score,
+                                            }
+                                        )
+                                scored.sort(key=lambda x: x["score"], reverse=True)
+                            top = scored[:3] if all_kw and scored else []
+                            if top:
+                                parts = [
+                                    "以下是用户上传的文档中的相关内容，请参考这些内容来回答：\n"
+                                ]
+                                seen = set()
+                                for item in top:
+                                    parts.append(f"【{item['filename']}】\n{item['content']}\n")
+                                    if item["filename"] not in seen:
+                                        rag_sources.append({"filename": item["filename"]})
+                                        seen.add(item["filename"])
+                                rag_context = "\n".join(parts)
+                                logger.info(
+                                    f"[Chat] RAG 检索到 {len(top)} 个文本块, 来源: {rag_sources}"
+                                )
+                except Exception as e:
+                    logger.warning(f"[Chat] RAG 检索失败: {e}")
+
+            # 发送 RAG 来源
+            if rag_sources:
+                yield f"event: rag_sources\ndata: {json.dumps({'sources': rag_sources}, ensure_ascii=False)}\n\n"
 
             # 调用 AI 工作流（流式版本）
             run_agent_stream = get_run_agent_stream()
@@ -374,19 +463,28 @@ async def send_message_stream(
                 wallet_address=wallet_address,
                 session_id=session_id,
                 chat_history=chat_history,
+                rag_context=rag_context,
             ):
                 event_type = event.get("type")
 
+                # Agent 状态更新
+                if event_type == "agent_status":
+                    yield f"event: agent_status\ndata: {json.dumps(event, ensure_ascii=False)}\n\n"
+
                 # LLM 生成的 token - 立即发送到前端
-                if event_type == "token":
+                elif event_type == "token":
                     token = event.get("content", "")
                     if token:
                         full_explanation += token
                         yield f"event: token\ndata: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
 
+                # 附加数据（intent、资产等）
+                elif event_type == "data":
+                    final_result = event.get("data", {})
+
                 # 工作流完成
                 elif event_type == "complete":
-                    final_result = event.get("result", {})
+                    pass
 
                 # 工作流中断（需要用户确认）
                 elif event_type == "interrupt":
@@ -421,18 +519,20 @@ async def send_message_stream(
             data = build_chat_data(final_result)
             yield f"event: data\ndata: {json.dumps({'intent': final_result.get('intent', 'chat'), 'intent_params': final_result.get('intent_params', {}), 'data': data}, ensure_ascii=False)}\n\n"
 
-            # 保存 AI 回复
-            await save_chat_message(
-                db,
-                chat_session,
-                MessageRole.ASSISTANT,
-                full_explanation,
-                final_result.get("intent", ""),
-            )
-            await cache_delete_by_patterns(
-                redis,
-                [f"chat:sessions:{user_key}:*", f"chat:messages:{session_id}:*"],
-            )
+            # 只有登录用户才保存 AI 回复到数据库
+            if wallet_address and chat_session:
+                await save_chat_message(
+                    db,
+                    chat_session,
+                    MessageRole.ASSISTANT,
+                    full_explanation,
+                    final_result.get("intent", ""),
+                )
+                user_key = wallet_address
+                await cache_delete_by_patterns(
+                    redis,
+                    [f"chat:sessions:{user_key}:*", f"chat:messages:{session_id}:*"],
+                )
 
             yield "event: done\ndata: {}\n\n"
 
@@ -558,6 +658,54 @@ async def get_messages(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"查询消息历史失败: {str(e)}")
+
+
+@router.delete("/sessions/{session_id}")
+async def delete_session(
+    session_id: str,
+    wallet_address: str,
+    db: AsyncSession = Depends(get_db),
+    redis=Depends(get_redis),
+):
+    """删除会话及其所有消息"""
+    try:
+        # 查找用户
+        result = await db.execute(select(User).where(User.wallet_address == wallet_address))
+        user = result.scalar_one_or_none()
+        if not user:
+            raise HTTPException(status_code=404, detail="用户不存在")
+
+        # 查找会话
+        result = await db.execute(
+            select(ChatSession).where(
+                ChatSession.session_id == session_id, ChatSession.user_id == user.id
+            )
+        )
+        session = result.scalar_one_or_none()
+        if not session:
+            raise HTTPException(status_code=404, detail="会话不存在")
+
+        # 删除消息
+        await db.execute(delete(ChatMessage).where(ChatMessage.session_id == session.id))
+        # 删除会话
+        await db.delete(session)
+        await db.commit()
+
+        # 清除缓存
+        await cache_delete_by_patterns(
+            redis,
+            [
+                f"chat:sessions:{wallet_address}:*",
+                f"chat:messages:{session_id}:*",
+            ],
+        )
+
+        return {"success": True, "message": "会话删除成功"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"删除会话失败: {str(e)}")
 
 
 @router.get("/health")
