@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 
-async def test_marginfi_provider_lending_pools():
+async def _test_marginfi_provider_lending_pools():
     """测试 MarginFi Provider — get_lending_pools()"""
     from blockchain.providers.marginfi import MarginFiProvider
 
@@ -51,7 +51,7 @@ async def test_marginfi_provider_lending_pools():
     return True, data_source
 
 
-async def test_marginfi_provider_user_positions():
+async def _test_marginfi_provider_user_positions():
     """测试 MarginFi Provider — get_user_positions()"""
     from blockchain.providers.marginfi import MarginFiProvider
 
@@ -73,7 +73,7 @@ async def test_marginfi_provider_user_positions():
     return True
 
 
-async def test_marginfi_provider_parse_i80f48():
+async def _test_marginfi_provider_parse_i80f48():
     """测试 MarginFi Provider — I80F48 解析"""
     from blockchain.providers.marginfi import MarginFiProvider
 
@@ -101,7 +101,7 @@ async def test_marginfi_provider_parse_i80f48():
     return True
 
 
-async def test_marginfi_provider_swap_rejected():
+async def _test_marginfi_provider_swap_rejected():
     """测试 MarginFi Provider — Swap 应被拒绝"""
     from blockchain.exceptions import ProviderError
     from blockchain.providers.marginfi import MarginFiProvider
@@ -128,6 +128,26 @@ async def test_marginfi_provider_swap_rejected():
         return False
 
 
+def test_marginfi_provider_lending_pools():
+    """pytest 入口：运行 MarginFi 借贷池查询测试"""
+    asyncio.run(_test_marginfi_provider_lending_pools())
+
+
+def test_marginfi_provider_user_positions():
+    """pytest 入口：运行 MarginFi 用户仓位查询测试"""
+    asyncio.run(_test_marginfi_provider_user_positions())
+
+
+def test_marginfi_provider_parse_i80f48():
+    """pytest 入口：运行 I80F48 解析测试"""
+    asyncio.run(_test_marginfi_provider_parse_i80f48())
+
+
+def test_marginfi_provider_swap_rejected():
+    """pytest 入口：运行 Swap 拒绝测试"""
+    asyncio.run(_test_marginfi_provider_swap_rejected())
+
+
 async def main():
     """运行所有 MarginFi 测试"""
     print("\n" + "🏦" * 30)
@@ -138,10 +158,10 @@ async def main():
     pool_source = "unknown"
 
     for name, test_func in [
-        ("Provider: 借贷池查询", test_marginfi_provider_lending_pools),
-        ("Provider: 用户仓位查询", test_marginfi_provider_user_positions),
-        ("Provider: I80F48 解析", test_marginfi_provider_parse_i80f48),
-        ("Provider: Swap 拒绝", test_marginfi_provider_swap_rejected),
+        ("Provider: 借贷池查询", _test_marginfi_provider_lending_pools),
+        ("Provider: 用户仓位查询", _test_marginfi_provider_user_positions),
+        ("Provider: I80F48 解析", _test_marginfi_provider_parse_i80f48),
+        ("Provider: Swap 拒绝", _test_marginfi_provider_swap_rejected),
     ]:
         try:
             result = await test_func()

@@ -111,6 +111,17 @@
 - Postgres 建表 SQL 文件说明
 - 常用数据库查询 SQL
 
+#### [docs/DOCKER_FRONTEND_BACKEND_TEST_GUIDE.md](./DOCKER_FRONTEND_BACKEND_TEST_GUIDE.md)
+**用途**: Docker 前后端联调与冒烟测试指南
+**适合**: 前端开发者、后端开发者、联调负责人
+**内容**:
+- Docker Compose 启动与健康检查
+- 前后端容器互通验证
+- REST 接口冒烟测试
+- SSE 流式聊天测试
+- 会话与消息持久化验证
+- 日志排查与容器清理
+
 #### [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)
 **用途**: 系统架构和数据流图
 **适合**: 所有开发者（必读）
