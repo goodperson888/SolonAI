@@ -76,8 +76,36 @@ class ExplanationAgent(BaseAgent):
         elif intent == "risk_check":
             prompt_input = self._build_risk_prompt(state)
         else:
-            # 普通聊天
-            prompt_input = f"用户说：{user_input}\n请用友好的语气回复。"
+            # 普通聊天 - 如果有 DeFi 数据或钱包资产，也提供给 AI 参考
+            best_opportunities = state.get("defi_best_opportunities", [])
+            market_prices = state.get("market_prices", {})
+            wallet_assets = state.get("wallet_assets", [])
+            total_value_usd = state.get("total_value_usd", 0)
+
+            # 构建可用数据
+            available_data = []
+            if wallet_assets:
+                available_data.append(
+                    f"- 用户资产：{json.dumps(wallet_assets, ensure_ascii=False)} (总价值: ${total_value_usd:.2f})"
+                )
+            if best_opportunities:
+                available_data.append(
+                    f"- 最佳收益机会：{json.dumps(best_opportunities[:5], ensure_ascii=False)}"
+                )
+            if market_prices:
+                available_data.append(
+                    f"- 市场价格：{json.dumps(market_prices, ensure_ascii=False)}"
+                )
+
+            if available_data:
+                prompt_input = f"""用户说：{user_input}
+
+可用的数据（供参考）：
+{chr(10).join(available_data)}
+
+请用友好的语气回复用户的问题。如果问题与资产、DeFi 收益、价格相关，可以引用上述数据。"""
+            else:
+                prompt_input = f"用户说：{user_input}\n请用友好的语气回复。"
 
         # 从 RAG 知识库检索相关知识作为参考
         logger.info(
@@ -123,8 +151,36 @@ class ExplanationAgent(BaseAgent):
         elif intent == "risk_check":
             prompt_input = self._build_risk_prompt(state)
         else:
-            # 普通聊天
-            prompt_input = f"用户说：{user_input}\n请用友好的语气回复。"
+            # 普通聊天 - 如果有 DeFi 数据或钱包资产，也提供给 AI 参考
+            best_opportunities = state.get("defi_best_opportunities", [])
+            market_prices = state.get("market_prices", {})
+            wallet_assets = state.get("wallet_assets", [])
+            total_value_usd = state.get("total_value_usd", 0)
+
+            # 构建可用数据
+            available_data = []
+            if wallet_assets:
+                available_data.append(
+                    f"- 用户资产：{json.dumps(wallet_assets, ensure_ascii=False)} (总价值: ${total_value_usd:.2f})"
+                )
+            if best_opportunities:
+                available_data.append(
+                    f"- 最佳收益机会：{json.dumps(best_opportunities[:5], ensure_ascii=False)}"
+                )
+            if market_prices:
+                available_data.append(
+                    f"- 市场价格：{json.dumps(market_prices, ensure_ascii=False)}"
+                )
+
+            if available_data:
+                prompt_input = f"""用户说：{user_input}
+
+可用的数据（供参考）：
+{chr(10).join(available_data)}
+
+请用友好的语气回复用户的问题。如果问题与资产、DeFi 收益、价格相关，可以引用上述数据。"""
+            else:
+                prompt_input = f"用户说：{user_input}\n请用友好的语气回复。"
 
         # 优先使用 chat.py 预检索的 RAG 上下文（避免 Agent 自调用 HTTP 死锁）
         rag_context = state.get("rag_context", "")
@@ -173,19 +229,65 @@ class ExplanationAgent(BaseAgent):
 5. 控制在 150-200 字"""
 
     def _build_strategy_prompt(self, state: Dict[str, Any]) -> str:
+        # 优先使用 DeFi 聚合数据（DataAggregationAgent 提供）
+        best_opportunities = state.get("defi_best_opportunities", [])
+        protocol_data = state.get("protocol_data", {})
+        market_prices = state.get("market_prices", {})
+        wallet_assets = state.get("wallet_assets", [])
+        total_value_usd = state.get("total_value_usd", 0)
+
+        # 降级：使用旧的策略数据（如果有专门的 StrategyAgent）
         strategy = state.get("strategy", {})
         risk = state.get("risk_assessment", {})
-        validation = state.get("validation_result", {})
-        return f"""请用大白话解读以下投资策略：
+
+        if best_opportunities or protocol_data:
+            # 构建用户资产信息
+            assets_info = ""
+            if wallet_assets:
+                assets_info = f"""
+用户当前资产：
+{json.dumps(wallet_assets, ensure_ascii=False, indent=2)}
+总价值：${total_value_usd:.2f}
+"""
+            else:
+                assets_info = "用户未连接钱包，无法获取资产信息。"
+
+            # 使用 DeFi 聚合数据
+            return f"""请根据以下 DeFi 市场数据和用户资产，为用户推荐投资策略：
+
+{assets_info}
+
+最佳收益机会：
+{json.dumps(best_opportunities, ensure_ascii=False, indent=2)}
+
+协议收益率数据：
+{json.dumps(protocol_data, ensure_ascii=False, indent=2)}
+
+市场价格：
+{json.dumps(market_prices, ensure_ascii=False, indent=2)}
+
+用户参数：
+- 风险偏好：{state.get("intent_params", {}).get("risk_level", "moderate")}
+- 投资金额：{state.get("intent_params", {}).get("amount", "未指定")}
+- 投资币种：{state.get("intent_params", {}).get("token", "SOL")}
+
+要求：
+1. **首先告诉用户他当前有多少资产**（如果有资产数据）
+2. 从最佳机会中挑选 2-3 个适合用户风险偏好的协议
+3. 用大白话解释每个协议是做什么的（比如"像银行存款一样赚利息"）
+4. 根据用户实际资产，说明预期收益（比如"你有 40 SOL，存入 MarginFi 一年能赚 2.4 SOL"）
+5. 提醒风险（比如"价格波动可能导致损失"）
+6. 给出具体操作建议（比如"可以先存一小部分试试"）
+7. 控制在 300-400 字"""
+        else:
+            # 降级：使用旧的策略数据格式
+            return f"""请用大白话解读以下投资策略：
 
 策略内容：
 {json.dumps(strategy, ensure_ascii=False, indent=2)}
 
 风控审计结果：
 {json.dumps(risk, ensure_ascii=False, indent=2)}
-
-验证结果：
-{json.dumps(validation, ensure_ascii=False, indent=2)}
 
 要求：
 1. 按照"生成策略"的格式模板回复

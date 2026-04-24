@@ -39,15 +39,31 @@ class IntentAgent(BaseAgent):
             return state
 
         chat_history = state.get("chat_history", [])
+
+        # 调试日志
+        print(f"\n{'=' * 60}")
+        print(f"[IntentAgent] 用户输入: {user_input}")
+        print(f"[IntentAgent] 历史对话数量: {len(chat_history)}")
+        if chat_history:
+            print("[IntentAgent] 最近3条历史:")
+            for msg in chat_history[-3:]:
+                print(f"  - {msg.get('role')}: {msg.get('content')[:50]}...")
+        print(f"{'=' * 60}\n")
+
         result = await self.call_llm_json(user_input, chat_history)
 
         if result.get("parse_error"):
             # JSON 解析失败，默认当作普通聊天
             state["intent"] = "chat"
             state["intent_params"] = {}
+            print("[IntentAgent] ❌ JSON 解析失败，默认为 chat")
         else:
             state["intent"] = result.get("intent", "chat")
             state["intent_params"] = result.get("params", {})
+            print(f"[IntentAgent] ✓ 识别意图: {state['intent']}")
+            print(f"[IntentAgent] ✓ 参数: {state['intent_params']}")
+            if result.get("reasoning"):
+                print(f"[IntentAgent] ✓ 推理: {result.get('reasoning')}")
 
         state["current_agent"] = self.name
         return state

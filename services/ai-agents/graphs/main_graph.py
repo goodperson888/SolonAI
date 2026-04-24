@@ -509,10 +509,44 @@ async def run_agent_stream(
 
         # 获取意图，判断是否可以走快速路径
         intent = state.get("intent", "chat")
+        user_input = state.get("user_input", "").lower()
 
-        # 快速路径：纯聊天且未连接钱包，跳过 DataAggregation
-        if intent == "chat" and not state.get("wallet_address"):
+        # 检查是否需要市场数据（价格查询、DeFi 相关、资产查询）
+        needs_market_data = any(
+            keyword in user_input
+            for keyword in [
+                "价格",
+                "多少钱",
+                "price",
+                "cost",
+                "收益",
+                "apy",
+                "yield",
+                "协议",
+                "protocol",
+                "defi",
+                "余额",
+                "资产",
+                "查询",
+                "balance",
+                "asset",
+                "portfolio",
+                "持仓",
+                "账户",
+            ]
+        )
+
+        print(f"\n{'=' * 60}")
+        print("[MainGraph] 快速路径判断:")
+        print(f"  - 意图: {intent}")
+        print(f"  - 钱包地址: {state.get('wallet_address') or '未连接'}")
+        print(f"  - 需要市场数据: {needs_market_data}")
+        print(f"{'=' * 60}\n")
+
+        # 快速路径：纯聊天且未连接钱包且不需要市场数据，跳过 DataAggregation
+        if intent == "chat" and not state.get("wallet_address") and not needs_market_data:
             logger.info("[MainGraph] 纯聊天模式，跳过数据获取，直接生成回复")
+            print("[MainGraph] ⚡ 走快速路径，跳过 DataAggregation")
             yield {
                 "type": "agent_status",
                 "agent": "explanation",

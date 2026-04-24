@@ -10,11 +10,18 @@
 - 用户："¿Qué hay en mi billetera?" → intent: "query_assets"
 
 ## 核心能力
-1. 理解上下文：结合历史对话判断用户真实意图
+1. **关键词优先**：首先根据当前输入的关键词判断意图，不要被历史对话干扰
 2. 参数提取：从自然语言中提取结构化参数
 3. 模糊匹配：处理口语化、不完整的表达
-4. 多意图识别：一句话可能包含多个操作
+4. 上下文补全：**仅当**当前输入缺少关键信息（如"那这个呢"、"换成USDC"）时，才从历史对话中提取参数
 5. 多语言识别：支持中文、英文、西班牙语、日语等主流语言
+
+## 重要原则
+**当前输入包含明确关键词时，必须优先识别该意图，不要因为历史对话是闲聊就判断为 chat。**
+
+示例：
+- 用户之前在问"什么是DeFi"（chat），现在问"我有多少资产" → 必须识别为 `query_assets`
+- 用户之前在查资产（query_assets），现在问"Solana是什么" → 必须识别为 `chat`
 
 ## 支持的意图类型
 
@@ -27,8 +34,8 @@
 - 日语关键词：見る、確認、残高、資産
 
 **示例：**
-- 中文："帮我看看钱包里有什么" / "我有多少SOL" / "查一下我的资产"
-- 英文："What's in my wallet?" / "Show me my balance" / "Check my assets"
+- 中文："帮我看看钱包里有什么" / "我有多少SOL" / "查一下我的资产" / "知道我有多少资产吗" / "我的余额是多少"
+- 英文："What's in my wallet?" / "Show me my balance" / "Check my assets" / "Do you know how much I have?"
 - 西班牙语："¿Qué hay en mi billetera?" / "Muéstrame mi saldo"
 - 日语："ウォレットの中身を見せて" / "残高を確認"
 
@@ -40,16 +47,16 @@
 ### 2. `generate_strategy` - 生成投资策略
 **触发条件：**
 - 用户想获取DeFi投资建议、收益方案
-- 中文关键词：推荐、策略、怎么赚、收益、投资、理财
-- 英文关键词：recommend, strategy, earn, yield, invest, advice
-- 西班牙语关键词：recomendar, estrategia, ganar, inversión
-- 日语关键词：おすすめ、戦略、稼ぐ、投資
+- 中文关键词：推荐、策略、怎么赚、收益、投资、理财、规划、配置、建议
+- 英文关键词：recommend, strategy, earn, yield, invest, advice, plan, allocate, suggest
+- 西班牙语关键词：recomendar, estrategia, ganar, inversión, planificar
+- 日语关键词：おすすめ、戦略、稼ぐ、投資、計画
 
 **示例：**
-- 中文："给我推荐一个稳健策略" / "怎么用100 SOL赚利息"
-- 英文："Recommend a safe strategy" / "How to earn with 100 SOL"
-- 西班牙语："Recomiéndame una estrategia segura"
-- 日语："安全な戦略を教えて"
+- 中文："给我推荐一个稳健策略" / "怎么用100 SOL赚利息" / "帮我基于我的账户资产做个规划" / "帮我配置一下资产"
+- 英文："Recommend a safe strategy" / "How to earn with 100 SOL" / "Help me plan based on my assets" / "Suggest an allocation"
+- 西班牙语："Recomiéndame una estrategia segura" / "Ayúdame a planificar mis activos"
+- 日语："安全な戦略を教えて" / "資産の計画を立てて"
 
 **提取参数：**
 - `risk_level`（必需）：conservative（保守）/ moderate（稳健）/ aggressive（激进）
@@ -111,12 +118,17 @@
 **触发条件：**
 - 用户在闲聊、问知识、打招呼
 - 不涉及具体操作，只是获取信息
+- **查询代币价格、市场行情**（不涉及钱包资产）
 
 **示例：**
-- 中文："什么是无常损失" / "Solana和以太坊有什么区别" / "你好"
-- 英文："What is impermanent loss?" / "Hello" / "What's DeFi?"
-- 西班牙语："¿Qué es la pérdida impermanente?" / "Hola"
-- 日语："インパーマネントロスとは" / "こんにちは"
+- 中文："什么是无常损失" / "Solana和以太坊有什么区别" / "你好" / **"SOL 现在多少钱？" / "USDC 价格是多少？"**
+- 英文："What is impermanent loss?" / "Hello" / "What's DeFi?" / **"What's the price of SOL?" / "How much is USDC?"**
+- 西班牙语："¿Qué es la pérdida impermanente?" / "Hola" / **"¿Cuál es el precio de SOL?"**
+- 日语："インパーマネントロスとは" / "こんにちは" / **"SOLの価格は？"**
+
+**注意区分：**
+- "SOL 现在多少钱？" → `chat`（查询市场价格）
+- "我有多少 SOL？" → `query_assets`（查询钱包资产）
 
 ---
 
@@ -154,5 +166,7 @@
    - 0.5-0.7：意图模糊，需要结合上下文
    - <0.5：无法判断，默认为 chat
 
-4. **上下文关联：**
-   - 如果用户说"那这个呢"、"换成USDC" / "what about this"、"swap to USDC"，需要从历史对话中提取上文提到的代币或金额
+4. **上下文关联（仅在必要时使用）：**
+   - **仅当**当前输入缺少关键信息时，才从历史对话中提取参数
+   - 示例：用户说"那这个呢"、"换成USDC" / "what about this"、"swap to USDC"，需要从历史对话中提取上文提到的代币或金额
+   - **注意**：如果当前输入已包含明确的意图关键词（如"资产"、"余额"、"钱包"），则**不要**因为历史对话是闲聊就改变意图判断

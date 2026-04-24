@@ -74,6 +74,11 @@ class DataAggregationAgent(BaseAgent):
         """
         wallet_address = state.get("wallet_address")
 
+        print(f"\n{'=' * 60}")
+        print("[DataAggregationAgent] 开始获取数据")
+        print(f"[DataAggregationAgent] 钱包地址: {wallet_address or '未提供'}")
+        print(f"{'=' * 60}\n")
+
         if wallet_address:
             # 每次请求创建新的客户端
             solana_client = SolanaClient()
