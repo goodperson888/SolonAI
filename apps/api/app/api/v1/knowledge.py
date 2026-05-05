@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from sqlalchemy import delete, desc, select
+from sqlalchemy import delete, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # 添加 AI 服务路径（与 chat.py 保持一致）
@@ -185,6 +185,18 @@ async def list_documents(
     result = await db.execute(query)
     docs = result.scalars().all()
 
+    # 批量查询每个文档的 chunk 数量
+    chunk_counts = {}
+    if docs:
+        doc_ids = [doc.id for doc in docs]
+        count_query = (
+            select(KnowledgeChunk.document_id, func.count(KnowledgeChunk.id))
+            .where(KnowledgeChunk.document_id.in_(doc_ids))
+            .group_by(KnowledgeChunk.document_id)
+        )
+        count_result = await db.execute(count_query)
+        chunk_counts = dict(count_result.all())
+
     return {
         "documents": [
             {
@@ -193,7 +205,7 @@ async def list_documents(
                 "filename": doc.filename,
                 "file_type": doc.file_type.value,
                 "file_size": doc.file_size,
-                "chunk_count": 0,  # TODO: 可以优化为实际查询
+                "chunk_count": chunk_counts.get(doc.id, 0),
                 "upload_time": str(doc.created_at),
                 "metadata": {
                     "title": doc.title,

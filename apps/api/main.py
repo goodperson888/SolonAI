@@ -49,6 +49,7 @@ async def health_check():
     return {
         "status": "healthy" if redis_ok else "degraded",
         "redis": "connected" if redis_ok else "disconnected",
+        "demo_mode": settings.SOLON_DEMO_MODE,
     }
 
 

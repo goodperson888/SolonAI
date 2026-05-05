@@ -138,14 +138,21 @@ class EnhancedRPCClient:
                         token_amount = info.get("tokenAmount", {})
                         ui_amount = token_amount.get("uiAmount")
                         if ui_amount is not None and ui_amount > 0:
-                            accounts.append(
-                                {
-                                    "mint": info["mint"],
-                                    "balance_raw": int(token_amount.get("amount", 0)),
-                                    "balance": float(ui_amount),
-                                    "decimals": token_amount.get("decimals", 0),
-                                }
-                            )
+                            entry = {
+                                "mint": info["mint"],
+                                "balance_raw": int(token_amount.get("amount", 0)),
+                                "balance": float(ui_amount),
+                                "decimals": token_amount.get("decimals", 0),
+                            }
+                            # 包含委托/授权信息
+                            delegate = info.get("delegate")
+                            if delegate:
+                                delegated_amount = info.get("delegatedAmount", {})
+                                entry["delegate"] = delegate
+                                entry["delegated_amount"] = float(
+                                    delegated_amount.get("uiAmount", 0)
+                                )
+                            accounts.append(entry)
                     except (KeyError, TypeError):
                         continue
             return accounts

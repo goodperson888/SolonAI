@@ -16,14 +16,17 @@ class SolanaConfig:
     """Solana RPC 配置"""
 
     # ---- 网络 ----
-    NETWORK: str = os.getenv("SOLANA_NETWORK", "devnet")
+    NETWORK: str = os.getenv("SOLANA_NETWORK", "mainnet")
 
     # ---- RPC 端点（按优先级排列） ----
     RPC_ENDPOINTS: List[str] = [
         url.strip()
         for url in os.getenv(
             "SOLANA_RPC_URLS",
-            os.getenv("SOLANA_RPC_URL", "https://api.devnet.solana.com"),
+            os.getenv(
+                "SOLANA_RPC_URL",
+                "https://api.mainnet-beta.solana.com,https://solana-rpc.publicnode.com",
+            ),
         ).split(",")
         if url.strip()
     ]
@@ -70,16 +73,27 @@ class SolanaConfig:
     }
 
     @classmethod
-    def get_tokens(cls) -> Dict[str, str]:
+    def get_tokens(cls, network: str | None = None) -> Dict[str, str]:
         """根据当前网络返回代币地址映射"""
-        if cls.NETWORK == "devnet":
+        active_network = network or cls.NETWORK
+        if active_network == "devnet":
             return cls.DEVNET_TOKENS
         return cls.MAINNET_TOKENS
 
     @classmethod
-    def get_primary_rpc(cls) -> str:
+    def get_primary_rpc(cls, network: str | None = None) -> str:
         """获取主 RPC 端点"""
+        if network == "devnet":
+            return "https://api.devnet.solana.com"
         return cls.RPC_ENDPOINTS[0] if cls.RPC_ENDPOINTS else "https://api.devnet.solana.com"
+
+    @classmethod
+    def get_rpc_endpoints(cls, network: str | None = None) -> List[str]:
+        """根据网络返回 RPC 列表。"""
+        active_network = network or cls.NETWORK
+        if active_network == "devnet":
+            return ["https://api.devnet.solana.com"]
+        return cls.RPC_ENDPOINTS
 
 
 config = SolanaConfig()

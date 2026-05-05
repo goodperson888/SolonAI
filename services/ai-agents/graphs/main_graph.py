@@ -40,6 +40,7 @@ Solon AI - LangGraph 主工作流
     返回给用户
 """
 
+import asyncio
 import logging
 import os
 import sys
@@ -64,6 +65,64 @@ from llm_factory import create_llm  # noqa: E402
 from state import GraphState  # noqa: E402
 
 logger = logging.getLogger(__name__)
+
+
+def _build_card_patch_payloads(result: Dict[str, Any], thread_id: str) -> list[Dict[str, Any]]:
+    """根据工作流结果构建渐进式卡片补丁。"""
+    base = {
+        "intent": result.get("intent", "chat"),
+        "intent_params": result.get("intent_params", {}),
+        "thread_id": result.get("thread_id", thread_id),
+        "interrupted": result.get("interrupted", False),
+    }
+    patches: list[Dict[str, Any]] = []
+
+    if result.get("strategy"):
+        patches.append(
+            {
+                "card": "strategy",
+                "data": {
+                    **base,
+                    "strategy": result.get("strategy"),
+                },
+            }
+        )
+
+    if result.get("risk_assessment"):
+        patches.append(
+            {
+                "card": "risk_assessment",
+                "data": {
+                    **base,
+                    "risk_assessment": result.get("risk_assessment"),
+                },
+            }
+        )
+
+    if result.get("wallet_assets"):
+        patches.append(
+            {
+                "card": "wallet_assets",
+                "data": {
+                    **base,
+                    "wallet_assets": result.get("wallet_assets"),
+                    "total_value_usd": result.get("total_value_usd", 0),
+                },
+            }
+        )
+
+    if result.get("approval_preview"):
+        patches.append(
+            {
+                "card": "approval_preview",
+                "data": {
+                    **base,
+                    "approval_preview": result.get("approval_preview"),
+                },
+            }
+        )
+
+    return patches
 
 
 # ===== 工作流节点 =====
@@ -577,108 +636,151 @@ async def run_agent_stream(
             yield {"type": "complete"}
             return
 
-        # 步骤2: 运行 DataAggregationAgent
-        yield {
-            "type": "agent_status",
-            "agent": "data",
-            "status": "running",
-            "message": "获取相关数据",
+        # 走真实工作流流式更新，节点完成后再推送对应卡片，避免四张卡同时出现。
+        workflow = get_workflow()
+        config = {"configurable": {"thread_id": tid}}
+        aggregate_result = dict(initial_state)
+
+        node_sequences = {
+            "generate_strategy": [
+                ("data_aggregation_node", "data", "整理链上和市场数据"),
+                ("strategy_node", "strategy", "生成投资策略"),
+                ("risk_node", "risk", "评估策略风险"),
+                ("validation_node", "validation", "校验执行条件"),
+                ("human_approval_node", "workflow", "整理执行确认"),
+            ],
+            "risk_check": [
+                ("data_aggregation_node", "data", "整理链上和市场数据"),
+                ("risk_node", "risk", "分析风险敞口"),
+                ("explanation_node", "explanation", "组织回复内容"),
+            ],
+            "execute_trade": [
+                ("data_aggregation_node", "data", "整理链上和市场数据"),
+                ("human_approval_node", "workflow", "整理执行确认"),
+            ],
+            "query_assets": [
+                ("data_aggregation_node", "data", "整理链上和市场数据"),
+                ("explanation_node", "explanation", "组织回复内容"),
+            ],
+            "chat": [
+                ("data_aggregation_node", "data", "整理链上和市场数据"),
+                ("explanation_node", "explanation", "组织回复内容"),
+            ],
         }
-        state = await agents["data"].process(state)
-        yield {"type": "agent_status", "agent": "data", "status": "done", "message": "数据获取完成"}
+        sequence = node_sequences.get(intent, node_sequences["chat"])
+        sequence_index = 0
 
-        # 步骤3: 根据 intent 决定是否需要运行其他 Agent
-        if intent == "generate_strategy":
-            # 策略生成流程：strategy -> risk -> validation
+        if sequence:
             yield {
                 "type": "agent_status",
-                "agent": "strategy",
+                "agent": sequence[0][1],
                 "status": "running",
-                "message": "生成投资策略",
-            }
-            state = await agents["strategy"].process(state)
-            yield {
-                "type": "agent_status",
-                "agent": "strategy",
-                "status": "done",
-                "message": "策略生成完成",
+                "message": sequence[0][2],
             }
 
+        async for update in workflow.astream(initial_state, config=config, stream_mode="updates"):
+            for node_name, node_output in update.items():
+                if isinstance(node_output, dict):
+                    aggregate_result.update(node_output)
+
+                matched = next((item for item in sequence if item[0] == node_name), None)
+                if matched:
+                    yield {
+                        "type": "agent_status",
+                        "agent": matched[1],
+                        "status": "done",
+                        "message": "完成",
+                    }
+
+                if node_name == "data_aggregation_node":
+                    yield {
+                        "type": "card_patch",
+                        "card": "wallet_assets",
+                        "data": {
+                            "intent": aggregate_result.get("intent", intent),
+                            "intent_params": aggregate_result.get("intent_params", {}),
+                            "wallet_assets": aggregate_result.get("wallet_assets", []),
+                            "total_value_usd": aggregate_result.get("total_value_usd", 0),
+                            "thread_id": tid,
+                            "interrupted": False,
+                        },
+                    }
+                elif node_name == "strategy_node":
+                    yield {
+                        "type": "card_patch",
+                        "card": "strategy",
+                        "data": {
+                            "intent": aggregate_result.get("intent", intent),
+                            "intent_params": aggregate_result.get("intent_params", {}),
+                            "strategy": aggregate_result.get("strategy"),
+                            "thread_id": tid,
+                            "interrupted": False,
+                        },
+                    }
+                elif node_name == "risk_node":
+                    yield {
+                        "type": "card_patch",
+                        "card": "risk_assessment",
+                        "data": {
+                            "intent": aggregate_result.get("intent", intent),
+                            "intent_params": aggregate_result.get("intent_params", {}),
+                            "risk_assessment": aggregate_result.get("risk_assessment"),
+                            "thread_id": tid,
+                            "interrupted": False,
+                        },
+                    }
+                elif node_name == "human_approval_node":
+                    yield {
+                        "type": "card_patch",
+                        "card": "approval_preview",
+                        "data": {
+                            "intent": aggregate_result.get("intent", intent),
+                            "intent_params": aggregate_result.get("intent_params", {}),
+                            "approval_preview": aggregate_result.get("approval_preview"),
+                            "thread_id": tid,
+                            "interrupted": True,
+                        },
+                    }
+                elif node_name == "explanation_node":
+                    explanation = aggregate_result.get("explanation", "")
+                    if explanation:
+                        for token in explanation:
+                            yield {"type": "token", "content": token}
+
+                if matched:
+                    sequence_index += 1
+                    if sequence_index < len(sequence):
+                        next_node = sequence[sequence_index]
+                        yield {
+                            "type": "agent_status",
+                            "agent": next_node[1],
+                            "status": "running",
+                            "message": next_node[2],
+                        }
+
+        snapshot = await workflow.aget_state(config)
+        result = dict(snapshot.values)
+        result["interrupted"] = bool(snapshot.next)
+        result["thread_id"] = tid
+
+        if result.get("interrupted"):
             yield {
-                "type": "agent_status",
-                "agent": "risk",
-                "status": "running",
-                "message": "评估风险",
-            }
-            state = await agents["risk"].process(state)
-            yield {
-                "type": "agent_status",
-                "agent": "risk",
-                "status": "done",
-                "message": "风险评估完成",
+                "type": "interrupt",
+                "thread_id": result.get("thread_id", tid),
+                "approval_preview": result.get("approval_preview"),
             }
 
-            yield {
-                "type": "agent_status",
-                "agent": "validation",
-                "status": "running",
-                "message": "验证策略",
-            }
-            state = await agents["validation"].process(state)
-            yield {
-                "type": "agent_status",
-                "agent": "validation",
-                "status": "done",
-                "message": "验证完成",
-            }
-
-        elif intent == "risk_check":
-            # 风控检查流程
-            yield {
-                "type": "agent_status",
-                "agent": "risk",
-                "status": "running",
-                "message": "检查风险",
-            }
-            state = await agents["risk"].process(state)
-            yield {
-                "type": "agent_status",
-                "agent": "risk",
-                "status": "done",
-                "message": "风险检查完成",
-            }
-
-        # 步骤4: 使用 ExplanationAgent 的流式方法生成最终回复
-        yield {
-            "type": "agent_status",
-            "agent": "explanation",
-            "status": "running",
-            "message": "生成回复",
-        }
-        logger.info("[MainGraph] 开始流式生成回复")
-        async for token in agents["explanation"].process_stream(state):
-            if isinstance(token, str):
+        if not result.get("interrupted") and result.get("explanation") and not aggregate_result.get("explanation"):
+            for token in result.get("explanation", ""):
                 yield {"type": "token", "content": token}
+
         yield {
             "type": "agent_status",
-            "agent": "explanation",
+            "agent": "workflow",
             "status": "done",
-            "message": "回复完成",
+            "message": "工作流执行完成",
         }
-
-        # 发送附加数据
-        yield {
-            "type": "data",
-            "data": {
-                "intent": state.get("intent", ""),
-                "intent_params": state.get("intent_params", {}),
-                "wallet_assets": state.get("wallet_assets", []),
-                "total_value_usd": state.get("total_value_usd", 0),
-                "rag_sources": state.get("rag_sources", []),
-            },
-        }
-
-        # 流式完成
+        yield {"type": "data", "data": result}
         yield {"type": "complete"}
 
     except Exception as e:
@@ -723,7 +825,7 @@ async def resume_agent(
                 "explanation": "已取消交易。如需重新操作，请再次告诉我。",
                 "completed": True,
             },
-            as_node="explanation",  # 跳到 explanation 节点（之后直接 END）
+            as_node="explanation_node",  # 跳到 explanation 节点（之后直接 END）
         )
         snapshot = await workflow.aget_state(config)
         result = snapshot.values
@@ -735,7 +837,7 @@ async def resume_agent(
     await workflow.aupdate_state(
         config,
         {"user_approved": True},
-        as_node="human_approval",
+        as_node="human_approval_node",
     )
 
     try:

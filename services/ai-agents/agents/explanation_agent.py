@@ -8,12 +8,157 @@ ExplanationAgent - 大白话解释
 
 import json
 import logging
-from typing import Any, Dict
+import re
+from typing import Any, Dict, Optional
 
 from base_agent import BaseAgent
 from prompts import get_prompt
 
 logger = logging.getLogger(__name__)
+
+
+def _contains_cjk(text: str) -> bool:
+    return bool(re.search(r"[\u4e00-\u9fff]", text or ""))
+
+
+def _normalize_text(text: str) -> str:
+    return re.sub(r"\s+", "", (text or "").strip().lower())
+
+
+def _is_greeting(text: str) -> bool:
+    normalized = _normalize_text(text)
+    return normalized in {"你好", "您好", "hi", "hello", "hey", "嗨", "哈喽"}
+
+
+def _is_identity_question(text: str) -> bool:
+    normalized = _normalize_text(text)
+    return normalized in {"你是谁", "你是誰", "whoareyou", "介绍一下你自己", "你能做什么"}
+
+
+def _extract_price_symbol(text: str) -> Optional[str]:
+    raw = (text or "").upper()
+    for symbol in ["BTC", "ETH", "SOL", "USDC", "USDT", "JUP", "RAY", "BONK"]:
+        if symbol in raw:
+            return symbol
+    return None
+
+
+def _is_price_question(text: str) -> bool:
+    raw = (text or "").lower()
+    keywords = ["价格", "多少钱", "price", "quote", "行情", "市价"]
+    return any(keyword in raw for keyword in keywords) and _extract_price_symbol(text) is not None
+
+
+def _build_direct_chat_reply(state: Dict[str, Any]) -> Optional[str]:
+    user_input = state.get("user_input", "")
+    is_chinese = _contains_cjk(user_input)
+
+    if _is_greeting(user_input):
+        return (
+            "你好，我是 Solon AI。你可以让我帮你看资产、做策略、看风险，或者解释 Solana / DeFi 问题。"
+            if is_chinese
+            else "Hi, I'm Solon AI. I can help with assets, strategies, risk checks, and Solana/DeFi questions."
+        )
+
+    if _is_identity_question(user_input):
+        return (
+            "我是 Solon AI，专门帮你做 Solana 生态里的资产查看、DeFi 策略建议、执行前确认和风险提示。"
+            if is_chinese
+            else "I'm Solon AI. I help with Solana asset views, DeFi strategy ideas, execution previews, and risk checks."
+        )
+
+    if _is_price_question(user_input):
+        symbol = _extract_price_symbol(user_input) or "该代币"
+        market_prices = state.get("market_prices", {}) or {}
+        price_entry = market_prices.get(symbol)
+        price_value = price_entry.get("price_usd") if isinstance(price_entry, dict) else None
+        if isinstance(price_value, (int, float)):
+            return (
+                f"{symbol} 当前参考价格约为 ${price_value:.2f}。如果你愿意，我也可以顺手结合你的钱包资产看一下它对你的仓位影响。"
+                if is_chinese
+                else f"{symbol} is currently around ${price_value:.2f}. If you want, I can also relate that to your wallet holdings."
+            )
+        return (
+            f"我现在没有 {symbol} 的实时价格数据源，所以不想乱报一个数字给你。要是你愿意，我可以先帮你接一个更完整的行情源，或者继续回答它的用途和风险。"
+            if is_chinese
+            else f"I don't have a live price source for {symbol} right now, so I don't want to guess. I can help wire in a market feed or explain its use and risks instead."
+        )
+
+    return None
+
+
+def _infer_protocol_from_strategy(strategy: Optional[Dict[str, Any]]) -> str:
+    if not strategy:
+        return ""
+
+    protocol = strategy.get("protocol") or strategy.get("protocol_name")
+    if isinstance(protocol, str) and protocol.strip():
+        return protocol.strip().lower()
+
+    for step in strategy.get("steps", []) or []:
+        step_protocol = step.get("protocol")
+        if isinstance(step_protocol, str) and step_protocol.strip():
+            return step_protocol.strip().lower()
+
+    for protocol_name in strategy.get("protocols", []) or []:
+        if isinstance(protocol_name, str) and protocol_name.strip():
+            return protocol_name.strip().lower()
+
+    return ""
+
+
+def _is_lending_like_strategy(strategy: Optional[Dict[str, Any]]) -> bool:
+    if not strategy:
+        return False
+
+    protocol = _infer_protocol_from_strategy(strategy)
+    if protocol in {"marginfi", "solend", "kamino"}:
+        return True
+
+    steps = strategy.get("steps", []) or []
+    normalized_actions = {str(step.get("action") or "").strip().lower() for step in steps}
+    normalized_actions.discard("")
+    if not normalized_actions:
+        return False
+
+    return normalized_actions.issubset({"deposit", "lend", "supply", "stake"})
+
+
+def _sanitize_risk_assessment(
+    risk_assessment: Optional[Dict[str, Any]],
+    strategy: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    sanitized = dict(risk_assessment or {})
+    warnings = sanitized.get("warnings") or []
+
+    if _is_lending_like_strategy(strategy):
+        warnings = [
+            warning
+            for warning in warnings
+            if "无常损失" not in str(warning)
+        ]
+
+    sanitized["warnings"] = warnings
+    return sanitized
+
+
+def _sanitize_protocol_mentions(text: str, allowed_protocols: set[str]) -> str:
+    if not text:
+        return text
+
+    blocked_protocols = {
+        "lido": "未知外部协议",
+        "uniswap": "未知外部协议",
+        "marinade": "其他质押协议",
+        "aave": "其他借贷协议",
+    }
+
+    sanitized = text
+    lowered = {item.lower() for item in allowed_protocols if item}
+    for protocol, replacement in blocked_protocols.items():
+        if protocol not in lowered:
+            sanitized = re.sub(protocol, replacement, sanitized, flags=re.IGNORECASE)
+    return sanitized
 
 
 def _retrieve_rag_context(query: str, wallet_address: str = None) -> dict:
@@ -65,6 +210,14 @@ class ExplanationAgent(BaseAgent):
         intent = state.get("intent", "chat")
         user_input = state.get("user_input", "")
         wallet_address = state.get("wallet_address", "")
+        direct_reply = _build_direct_chat_reply(state)
+        if direct_reply and intent == "chat":
+            state["explanation"] = direct_reply
+            state["reasoning"] = "direct_chat_template"
+            state["rag_sources"] = []
+            state["completed"] = True
+            state["current_agent"] = self.name
+            return state
 
         # 根据不同意图构建不同的输入
         if intent == "query_assets":
@@ -76,36 +229,7 @@ class ExplanationAgent(BaseAgent):
         elif intent == "risk_check":
             prompt_input = self._build_risk_prompt(state)
         else:
-            # 普通聊天 - 如果有 DeFi 数据或钱包资产，也提供给 AI 参考
-            best_opportunities = state.get("defi_best_opportunities", [])
-            market_prices = state.get("market_prices", {})
-            wallet_assets = state.get("wallet_assets", [])
-            total_value_usd = state.get("total_value_usd", 0)
-
-            # 构建可用数据
-            available_data = []
-            if wallet_assets:
-                available_data.append(
-                    f"- 用户资产：{json.dumps(wallet_assets, ensure_ascii=False)} (总价值: ${total_value_usd:.2f})"
-                )
-            if best_opportunities:
-                available_data.append(
-                    f"- 最佳收益机会：{json.dumps(best_opportunities[:5], ensure_ascii=False)}"
-                )
-            if market_prices:
-                available_data.append(
-                    f"- 市场价格：{json.dumps(market_prices, ensure_ascii=False)}"
-                )
-
-            if available_data:
-                prompt_input = f"""用户说：{user_input}
-
-可用的数据（供参考）：
-{chr(10).join(available_data)}
-
-请用友好的语气回复用户的问题。如果问题与资产、DeFi 收益、价格相关，可以引用上述数据。"""
-            else:
-                prompt_input = f"用户说：{user_input}\n请用友好的语气回复。"
+            prompt_input = self._build_general_chat_prompt(state)
 
         # 从 RAG 知识库检索相关知识作为参考
         logger.info(
@@ -121,7 +245,17 @@ class ExplanationAgent(BaseAgent):
             logger.info("[ExplanationAgent] 未检索到 RAG 上下文")
 
         llm_result = await self.call_llm_with_metadata(prompt_input, state.get("chat_history", []))
-        state["explanation"] = llm_result["text"]
+        allowed_protocols = {
+            str(item).strip()
+            for item in (
+                list((state.get("strategy") or {}).get("protocols", []) or [])
+                + [state.get("strategy", {}).get("protocol")]
+                + [state.get("strategy", {}).get("protocol_name")]
+                + list((state.get("protocol_data") or {}).keys())
+            )
+            if item
+        }
+        state["explanation"] = _sanitize_protocol_mentions(llm_result["text"], allowed_protocols)
         state["reasoning"] = llm_result["reasoning"]
         state["rag_sources"] = rag_sources
         state["completed"] = True
@@ -140,6 +274,14 @@ class ExplanationAgent(BaseAgent):
         intent = state.get("intent", "chat")
         user_input = state.get("user_input", "")
         wallet_address = state.get("wallet_address", "")
+        direct_reply = _build_direct_chat_reply(state)
+        if direct_reply and intent == "chat":
+            for char in direct_reply:
+                yield char
+            state["explanation"] = direct_reply
+            state["completed"] = True
+            state["current_agent"] = self.name
+            return
 
         # 根据不同意图构建不同的输入
         if intent == "query_assets":
@@ -151,36 +293,7 @@ class ExplanationAgent(BaseAgent):
         elif intent == "risk_check":
             prompt_input = self._build_risk_prompt(state)
         else:
-            # 普通聊天 - 如果有 DeFi 数据或钱包资产，也提供给 AI 参考
-            best_opportunities = state.get("defi_best_opportunities", [])
-            market_prices = state.get("market_prices", {})
-            wallet_assets = state.get("wallet_assets", [])
-            total_value_usd = state.get("total_value_usd", 0)
-
-            # 构建可用数据
-            available_data = []
-            if wallet_assets:
-                available_data.append(
-                    f"- 用户资产：{json.dumps(wallet_assets, ensure_ascii=False)} (总价值: ${total_value_usd:.2f})"
-                )
-            if best_opportunities:
-                available_data.append(
-                    f"- 最佳收益机会：{json.dumps(best_opportunities[:5], ensure_ascii=False)}"
-                )
-            if market_prices:
-                available_data.append(
-                    f"- 市场价格：{json.dumps(market_prices, ensure_ascii=False)}"
-                )
-
-            if available_data:
-                prompt_input = f"""用户说：{user_input}
-
-可用的数据（供参考）：
-{chr(10).join(available_data)}
-
-请用友好的语气回复用户的问题。如果问题与资产、DeFi 收益、价格相关，可以引用上述数据。"""
-            else:
-                prompt_input = f"用户说：{user_input}\n请用友好的语气回复。"
+            prompt_input = self._build_general_chat_prompt(state)
 
         # 优先使用 chat.py 预检索的 RAG 上下文（避免 Agent 自调用 HTTP 死锁）
         rag_context = state.get("rag_context", "")
@@ -205,26 +318,41 @@ class ExplanationAgent(BaseAgent):
             yield token
 
         # 更新状态
-        state["explanation"] = full_text
+        allowed_protocols = {
+            str(item).strip()
+            for item in (
+                list((state.get("strategy") or {}).get("protocols", []) or [])
+                + [state.get("strategy", {}).get("protocol")]
+                + [state.get("strategy", {}).get("protocol_name")]
+                + list((state.get("protocol_data") or {}).keys())
+            )
+            if item
+        }
+        state["explanation"] = _sanitize_protocol_mentions(full_text, allowed_protocols)
         state["completed"] = True
         state["current_agent"] = self.name
 
     def _build_assets_prompt(self, state: Dict[str, Any]) -> str:
         assets = state.get("wallet_assets", [])
         total = state.get("total_value_usd", 0)
+        has_non_zero_assets = any(float(asset.get("balance", 0) or 0) > 0 for asset in assets)
         print(f"[ExplanationAgent] 收到的 state keys: {state.keys()}")
         print(f"[ExplanationAgent] wallet_assets: {assets}")
         print(f"[ExplanationAgent] total_value_usd: {total}")
+        if assets and has_non_zero_assets and float(total or 0) <= 0:
+            total_line = "钱包总价值：暂时无法准确估算（价格数据未取回）"
+        else:
+            total_line = f"钱包总价值：${total:,.2f}"
         return f"""请用大白话解读以下资产情况：
 
-钱包总价值：${total:,.2f}
+{total_line}
 持有代币：
 {json.dumps(assets, ensure_ascii=False, indent=2)}
 
 要求：
 1. 按照"查询资产"的格式模板回复
 2. 用一句话总结资产情况
-3. 列出每个代币的持有量和价值
+3. 列出每个代币的持有量和价值；如果某个代币或总价值暂无估值，就明确写“估值暂时不可用”，不要写成 $0.00，也不要说资产为空
 4. 给出简单的资产配置建议（1-2句话）
 5. 控制在 150-200 字"""
 
@@ -238,50 +366,35 @@ class ExplanationAgent(BaseAgent):
 
         # 降级：使用旧的策略数据（如果有专门的 StrategyAgent）
         strategy = state.get("strategy", {})
-        risk = state.get("risk_assessment", {})
+        risk = _sanitize_risk_assessment(state.get("risk_assessment", {}), strategy)
 
-        if best_opportunities or protocol_data:
-            # 构建用户资产信息
-            assets_info = ""
-            if wallet_assets:
-                assets_info = f"""
-用户当前资产：
-{json.dumps(wallet_assets, ensure_ascii=False, indent=2)}
-总价值：${total_value_usd:.2f}
-"""
+        has_non_zero_assets = any(float(asset.get("balance", 0) or 0) > 0 for asset in wallet_assets)
+        if wallet_assets:
+            if has_non_zero_assets and float(total_value_usd or 0) <= 0:
+                assets_info = (
+                    f"用户当前资产：\n{json.dumps(wallet_assets, ensure_ascii=False, indent=2)}\n"
+                    "总价值暂时无法准确估算（价格数据未取回），但用户确实持有以上资产。\n"
+                )
             else:
-                assets_info = "用户未连接钱包，无法获取资产信息。"
+                assets_info = (
+                    f"用户当前资产：\n{json.dumps(wallet_assets, ensure_ascii=False, indent=2)}\n"
+                    f"总价值：${total_value_usd:.2f}\n"
+                )
+        else:
+            assets_info = "用户未连接钱包，无法获取资产信息。\n"
 
-            # 使用 DeFi 聚合数据
-            return f"""请根据以下 DeFi 市场数据和用户资产，为用户推荐投资策略：
+        market_context = ""
+        if best_opportunities or protocol_data or market_prices:
+            market_context = f"""
+可参考的市场信息：
+- 最佳收益机会：{json.dumps(best_opportunities[:3], ensure_ascii=False, indent=2)}
+- 协议收益率数据：{json.dumps(protocol_data, ensure_ascii=False, indent=2)}
+- 市场价格：{json.dumps(market_prices, ensure_ascii=False, indent=2)}
+"""
+
+        return f"""请把“已经生成好的这套策略”解释给用户听，不要重新推荐另一套完全不同的方案。
 
 {assets_info}
-
-最佳收益机会：
-{json.dumps(best_opportunities, ensure_ascii=False, indent=2)}
-
-协议收益率数据：
-{json.dumps(protocol_data, ensure_ascii=False, indent=2)}
-
-市场价格：
-{json.dumps(market_prices, ensure_ascii=False, indent=2)}
-
-用户参数：
-- 风险偏好：{state.get("intent_params", {}).get("risk_level", "moderate")}
-- 投资金额：{state.get("intent_params", {}).get("amount", "未指定")}
-- 投资币种：{state.get("intent_params", {}).get("token", "SOL")}
-
-要求：
-1. **首先告诉用户他当前有多少资产**（如果有资产数据）
-2. 从最佳机会中挑选 2-3 个适合用户风险偏好的协议
-3. 用大白话解释每个协议是做什么的（比如"像银行存款一样赚利息"）
-4. 根据用户实际资产，说明预期收益（比如"你有 40 SOL，存入 MarginFi 一年能赚 2.4 SOL"）
-5. 提醒风险（比如"价格波动可能导致损失"）
-6. 给出具体操作建议（比如"可以先存一小部分试试"）
-7. 控制在 300-400 字"""
-        else:
-            # 降级：使用旧的策略数据格式
-            return f"""请用大白话解读以下投资策略：
 
 策略内容：
 {json.dumps(strategy, ensure_ascii=False, indent=2)}
@@ -289,13 +402,52 @@ class ExplanationAgent(BaseAgent):
 风控审计结果：
 {json.dumps(risk, ensure_ascii=False, indent=2)}
 
+{market_context}
+
+用户参数：
+- 风险偏好：{state.get("intent_params", {}).get("risk_level", "balanced")}
+- 投资金额：{state.get("intent_params", {}).get("amount", "未指定")}
+- 投资币种：{state.get("intent_params", {}).get("token", "SOL")}
+
 要求：
-1. 按照"生成策略"的格式模板回复
-2. 一句话说明这个策略是做什么的
-3. 用类比解释预期收益（比如存多少钱，每天/每月能赚多少）
-4. 说明有什么风险，用生活中的例子类比
-5. 如果有警告或错误，用醒目的方式提示
-6. 控制在 250-300 字"""
+1. 必须优先解释上面这套现有策略，不能再额外推荐 2-3 个新协议。
+2. 开头先明确用户当前真实资产，严禁虚构 40 SOL 这类持仓。
+3. 如果用户钱包里有非零资产，但总价值是 0 或缺失，只能说“价格估值暂不可用”，绝对不能说“没有资产”。
+4. 用 4 个短部分回答，标题固定为：
+   `资产情况`
+   `推荐策略`
+   `主要风险`
+   `执行建议`
+5. `推荐策略` 里只解释当前策略的核心协议、预期收益和步骤，不要展开成很多分散选项。
+6. `执行建议` 必须给出可操作动作，例如“先保存到策略工作台，再点击执行”或“先用模拟模式验证”。
+7. 如果举收益例子，必须直接基于当前真实资产估算。
+8. 语言尽量像产品文案，简洁、可信、可执行，不要写成长篇散文。
+9. 控制在 220-320 字。"""
+
+    def _build_general_chat_prompt(self, state: Dict[str, Any]) -> str:
+        user_input = state.get("user_input", "")
+        market_prices = state.get("market_prices", {})
+
+        if _is_price_question(user_input):
+            return f"""用户问题：{user_input}
+
+可用市场价格数据：
+{json.dumps(market_prices, ensure_ascii=False, indent=2)}
+
+要求：
+1. 只回答用户问到的价格问题，不要主动扯回钱包资产或投资策略。
+2. 如果提供的数据里没有对应币种价格，就明确说当前没有该币种实时价格，不要编造。
+3. 不要推荐 Lido、Uniswap、Aave、Ethereum 生态协议，除非用户明确点名。
+4. 语言简洁，控制在 80-140 字。"""
+
+        return f"""用户说：{user_input}
+
+要求：
+1. 如果这是打招呼、自我介绍或普通知识问答，就直接回答当前问题。
+2. 不要主动引入钱包资产、投资建议、收益方案，除非用户明确在问这些。
+3. 不要编造任何协议名、收益率或价格。
+4. 不要推荐 Lido、Uniswap、Aave、Ethereum 生态协议，除非用户明确点名。
+5. 语气友好自然，控制在 60-180 字。"""
 
     def _build_trade_prompt(self, state: Dict[str, Any]) -> str:
         transaction = state.get("transaction", {})

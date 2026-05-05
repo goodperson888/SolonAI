@@ -117,7 +117,19 @@ DATABASE_URL=postgresql://user:password@localhost:5432/solon_ai
 REDIS_URL=redis://localhost:6379
 JWT_SECRET=your-secret-key
 SOLANA_RPC_URL=https://solana-mainnet.g.alchemy.com/v2/YOUR_KEY
+SOLON_DEMO_MODE=false
 ```
+
+### 演示模式
+
+如果你当前主要目标是本地演示完整流程，而不是验证真实主网执行，可以打开后端演示模式：
+
+```bash
+SOLON_DEMO_MODE=1 ./start.sh
+```
+
+演示模式下会提供稳定的本地示例资产、PnL、诊断和策略执行预览，适合做页面联调、课堂展示和录屏。  
+要验证真实钱包签名与链上广播，请关闭演示模式并切回 `mainnet`。
 
 **AI服务 (services/ai-agents/.env)**
 ```env
@@ -423,4 +435,3 @@ MIT License
 ---
 
 **注意**: 本项目处于早期开发阶段，API可能会有变动。生产环境使用前请充分测试。
-

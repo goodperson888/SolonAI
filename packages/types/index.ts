@@ -11,7 +11,7 @@ export interface User {
 }
 
 export interface UserPreferences {
-  risk_level: 'conservative' | 'moderate' | 'aggressive';
+  risk_level: 'conservative' | 'balanced' | 'aggressive';
   notification_enabled: boolean;
   language: 'zh-CN' | 'en-US';
 }

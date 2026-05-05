@@ -46,6 +46,61 @@ from app.models.chat_message import MessageRole  # noqa: E402
 router = APIRouter()
 
 
+def _infer_protocol_from_steps(strategy: dict) -> Optional[str]:
+    if not strategy:
+        return None
+
+    protocol = strategy.get("protocol") or strategy.get("protocol_name")
+    if isinstance(protocol, str) and protocol.strip():
+        return protocol.strip()
+
+    steps = strategy.get("steps") or []
+    for step in steps:
+        step_protocol = step.get("protocol")
+        if isinstance(step_protocol, str) and step_protocol.strip():
+            return step_protocol.strip()
+
+    protocols = strategy.get("protocols") or []
+    if protocols and isinstance(protocols[0], str) and protocols[0].strip():
+        return protocols[0].strip()
+
+    return None
+
+
+def _normalize_strategy_payload(strategy: dict) -> dict:
+    normalized = dict(strategy or {})
+    inferred_protocol = _infer_protocol_from_steps(normalized)
+    if inferred_protocol:
+        normalized["protocol"] = inferred_protocol
+        normalized["protocol_name"] = inferred_protocol
+
+    title = normalized.get("title") or normalized.get("strategy_name")
+    if isinstance(title, str) and title.strip():
+        normalized["title"] = title.strip()
+        normalized["strategy_name"] = title.strip()
+
+    return normalized
+
+
+def _normalize_risk_payload(risk_assessment: dict, strategy: Optional[dict]) -> dict:
+    normalized = dict(risk_assessment or {})
+    warnings = normalized.get("warnings") or []
+    protocol = (_infer_protocol_from_steps(strategy or {}) or "").lower()
+    steps = (strategy or {}).get("steps") or []
+    actions = {str(step.get("action") or "").lower() for step in steps}
+
+    # 借贷/存款策略不应该出现 LP 无常损失提示
+    if protocol in {"marginfi", "solend"} or actions.issubset({"deposit", "lend", ""}):
+        warnings = [
+            warning
+            for warning in warnings
+            if "无常损失" not in str(warning)
+        ]
+
+    normalized["warnings"] = warnings
+    return normalized
+
+
 def get_run_agent():
     """Import AI workflow lazily so missing AI deps do not break API startup."""
     try:
@@ -116,6 +171,21 @@ class MessageItem(BaseModel):
     content: str
     intent: Optional[str]
     created_at: datetime
+    extra_data: Optional[dict] = None
+
+
+class ApprovalRequest(BaseModel):
+    """用户对 AI 提议的确认结果。"""
+
+    user_approved: bool = True
+
+
+class ThreadStateResponse(BaseModel):
+    """AI 工作流线程状态。"""
+
+    thread_id: str
+    interrupted: bool
+    next: list[str] = []
 
 
 async def get_or_create_user(db: AsyncSession, user_key: str) -> User:
@@ -205,19 +275,58 @@ async def run_chat_agent(
 
 def build_chat_data(result: dict) -> Optional[dict]:
     data = {}
+    intent = result.get("intent", "chat")
+    should_include_asset_cards = intent in {
+        "query_assets",
+        "generate_strategy",
+        "execute_trade",
+        "risk_check",
+    }
+    normalized_assets = []
     if result.get("strategy"):
-        data["strategy"] = result["strategy"]
+        data["strategy"] = _normalize_strategy_payload(result["strategy"])
     if result.get("risk_assessment"):
-        data["risk_assessment"] = result["risk_assessment"]
+        data["risk_assessment"] = _normalize_risk_payload(
+            result["risk_assessment"],
+            result.get("strategy"),
+        )
     if result.get("transaction"):
         data["transaction"] = result["transaction"]
-    if result.get("wallet_assets"):
-        data["wallet_assets"] = result["wallet_assets"]
-        data["total_value_usd"] = result.get("total_value_usd", 0)
+    if should_include_asset_cards and result.get("wallet_assets"):
+        for asset in result["wallet_assets"]:
+            normalized_assets.append(
+                {
+                    **asset,
+                    "symbol": asset.get("symbol") or asset.get("token"),
+                    "usd_value": asset.get("usd_value", asset.get("value_usd", 0)),
+                }
+            )
+        data["wallet_assets"] = normalized_assets
+        total_value_usd = result.get("total_value_usd", 0) or 0
+        asset_total_from_rows = sum(
+            float(asset.get("usd_value", 0) or 0) for asset in normalized_assets
+        )
+        has_non_zero_balance = any(
+            float(asset.get("balance", 0) or 0) > 0 for asset in normalized_assets
+        )
+
+        if total_value_usd <= 0:
+            total_value_usd = asset_total_from_rows
+
+        if total_value_usd <= 0 and has_non_zero_balance:
+            data["total_value_usd"] = None
+        else:
+            data["total_value_usd"] = total_value_usd
     if result.get("monitoring_config"):
         data["monitoring"] = result["monitoring_config"]
     if result.get("validation_result"):
         data["validation"] = result["validation_result"]
+    if result.get("approval_preview"):
+        data["approval_preview"] = result["approval_preview"]
+    if "interrupted" in result:
+        data["interrupted"] = result.get("interrupted")
+    if result.get("thread_id"):
+        data["thread_id"] = result["thread_id"]
     return data or None
 
 
@@ -482,6 +591,19 @@ async def send_message_stream(
                 elif event_type == "data":
                     final_result = event.get("data", {})
 
+                elif event_type == "card_patch":
+                    patch_result = event.get("data", {})
+                    patch_payload = {
+                        "card": event.get("card"),
+                        "intent": patch_result.get("intent", "chat"),
+                        "intent_params": patch_result.get("intent_params", {}),
+                        "data": build_chat_data(patch_result),
+                    }
+                    yield (
+                        "event: card_patch\n"
+                        f"data: {json.dumps(patch_payload, ensure_ascii=False)}\n\n"
+                    )
+
                 # 工作流完成
                 elif event_type == "complete":
                     pass
@@ -521,12 +643,17 @@ async def send_message_stream(
 
             # 只有登录用户才保存 AI 回复到数据库
             if wallet_address and chat_session:
+                assistant_extra_data = dict(final_result)
+                if full_explanation:
+                    assistant_extra_data["explanation"] = full_explanation
+
                 await save_chat_message(
                     db,
                     chat_session,
                     MessageRole.ASSISTANT,
                     full_explanation,
                     final_result.get("intent", ""),
+                    assistant_extra_data,
                 )
                 user_key = wallet_address
                 await cache_delete_by_patterns(
@@ -645,6 +772,7 @@ async def get_messages(
                 content=m.content,
                 intent=m.intent,
                 created_at=m.created_at,
+                extra_data=m.extra_data,
             )
             for m in messages
         ]
@@ -706,6 +834,65 @@ async def delete_session(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"删除会话失败: {str(e)}")
+
+
+@router.post("/threads/{thread_id}/approval")
+async def approve_thread_action(thread_id: str, request: ApprovalRequest):
+    """确认或拒绝当前 AI 提议的动作。"""
+    try:
+        from graphs.main_graph import get_agent_state, resume_agent  # noqa: WPS433, E402
+
+        state = await get_agent_state(thread_id)
+        if not state.get("interrupted"):
+            raise HTTPException(
+                status_code=409,
+                detail="当前会话没有等待确认的 AI 操作，可能已经处理过或线程已失效。",
+            )
+
+        result = await resume_agent(
+            thread_id=thread_id,
+            user_approved=request.user_approved,
+        )
+        return {
+            "reply": result.get("explanation", "已处理你的选择。"),
+            "intent": result.get("intent", "chat"),
+            "intent_params": result.get("intent_params", {}),
+            "data": build_chat_data(result),
+            "thread_id": result.get("thread_id", thread_id),
+            "interrupted": bool(result.get("interrupted", False)),
+        }
+    except ModuleNotFoundError as exc:
+        missing_package = exc.name or "unknown dependency"
+        raise HTTPException(
+            status_code=503,
+            detail=f"AI 审批服务依赖未安装: {missing_package}",
+        ) from exc
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"审批处理失败: {exc}") from exc
+
+
+@router.get("/threads/{thread_id}/state", response_model=ThreadStateResponse)
+async def get_thread_state(thread_id: str):
+    """查询某条 AI 审批线程当前是否仍可继续。"""
+    try:
+        from graphs.main_graph import get_agent_state  # noqa: WPS433, E402
+
+        state = await get_agent_state(thread_id)
+        return ThreadStateResponse(
+            thread_id=thread_id,
+            interrupted=bool(state.get("interrupted", False)),
+            next=state.get("next", []),
+        )
+    except ModuleNotFoundError as exc:
+        missing_package = exc.name or "unknown dependency"
+        raise HTTPException(
+            status_code=503,
+            detail=f"AI 审批状态服务依赖未安装: {missing_package}",
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"查询线程状态失败: {exc}") from exc
 
 
 @router.get("/health")

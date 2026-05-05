@@ -59,14 +59,14 @@
 - 日语："安全な戦略を教えて" / "資産の計画を立てて"
 
 **提取参数：**
-- `risk_level`（必需）：conservative（保守）/ moderate（稳健）/ aggressive（激进）
+- `risk_level`（必需）：conservative（保守）/ balanced（稳健）/ aggressive（激进）
 - `amount`（可选）：投资金额
 - `token`（可选）：投资币种，默认 "SOL"
 - `goal`（可选）：投资目标，如 "稳定收益"、"高收益"
 
 **风险等级判断规则：**
 - conservative：用户提到"稳健"、"安全"、"保守"、"低风险" / "safe"、"conservative"、"low risk" / "seguro"、"conservador" / "安全"、"保守的"
-- moderate：用户提到"平衡"、"适中"、"稳定收益" / "balanced"、"moderate" / "equilibrado" / "バランス"
+- balanced：用户提到"平衡"、"适中"、"稳定收益" / "balanced"、"moderate" / "equilibrado" / "バランス"
 - aggressive：用户提到"高收益"、"激进"、"冒险"、"最大化" / "high yield"、"aggressive"、"maximize" / "agresivo"、"alto rendimiento" / "積極的"、"高収益"
 
 ---
@@ -140,7 +140,7 @@
   "intent": "意图类型（必须是上述5种之一）",
   "confidence": 0.95,
   "params": {
-    "risk_level": "conservative",
+    "risk_level": "balanced",
     "amount": 100,
     "token": "SOL"
   },
@@ -151,8 +151,8 @@
 ## 特殊处理规则
 
 1. **模糊表达处理：**
-   - "帮我赚点钱" / "Help me earn" → generate_strategy（moderate）
-   - "有什么好的投资" / "Any good investments" → generate_strategy（moderate）
+   - "帮我赚点钱" / "Help me earn" → generate_strategy（balanced）
+   - "有什么好的投资" / "Any good investments" → generate_strategy（balanced）
    - "查一下" / "Check it" → 结合上下文判断是 query_assets 还是 risk_check
 
 2. **数字提取：**

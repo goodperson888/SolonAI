@@ -8,24 +8,29 @@ import { StrategyCard } from '@/components/strategy/StrategyCard'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { useTranslation } from '@/hooks/useTranslation'
-import { mockAssets, mockPortfolioStats } from '@/data/mockAssets'
-import { mockStrategies } from '@/data/mockStrategies'
 import {
   assetsApi,
+  strategyApi,
   WalletAssetsResponse,
   AssetDiagnosisResponse,
   PnLResponse,
+  Strategy,
+  StrategyCapabilitiesResponse,
 } from '@/lib/api-client'
+import { useSolanaNetwork } from '@/components/wallet/NetworkContext'
 
 type TabType = 'overview' | 'profit' | 'risk'
 
 export default function DashboardPage() {
   const { t } = useTranslation()
   const { publicKey, connected } = useWallet()
+  const { network } = useSolanaNetwork()
   const [activeTab, setActiveTab] = useState<TabType>('overview')
   const [walletAssets, setWalletAssets] = useState<WalletAssetsResponse | null>(null)
   const [diagnosis, setDiagnosis] = useState<AssetDiagnosisResponse | null>(null)
   const [pnl, setPnl] = useState<PnLResponse | null>(null)
+  const [strategies, setStrategies] = useState<Strategy[]>([])
+  const [capabilities, setCapabilities] = useState<StrategyCapabilitiesResponse | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -36,7 +41,7 @@ export default function DashboardPage() {
     setIsLoading(true)
     setError(null)
     try {
-      const data = await assetsApi.getWalletAssets(publicKey.toBase58())
+      const data = await assetsApi.getWalletAssets(publicKey.toBase58(), network)
       setWalletAssets(data)
     } catch (err) {
       console.error('Failed to fetch wallet assets:', err)
@@ -49,25 +54,26 @@ export default function DashboardPage() {
   useEffect(() => {
     if (connected && publicKey) {
       fetchWalletAssets()
-      if (activeTab === 'profit') {
-        fetchPnL()
-      } else if (activeTab === 'risk') {
+      fetchStrategies()
+      fetchPnL()
+      if (activeTab === 'risk') {
         fetchDiagnosis()
       }
     } else {
       setWalletAssets(null)
       setDiagnosis(null)
       setPnl(null)
+      setStrategies([])
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [connected, publicKey, activeTab])
+  }, [connected, publicKey, activeTab, network])
 
   const fetchPnL = async () => {
     if (!publicKey) return
 
     setIsLoading(true)
     try {
-      const data = await assetsApi.getPnL(publicKey.toBase58())
+      const data = await assetsApi.getPnL(publicKey.toBase58(), network)
       setPnl(data)
     } catch (err) {
       console.error('Failed to fetch PnL:', err)
@@ -81,7 +87,7 @@ export default function DashboardPage() {
 
     setIsLoading(true)
     try {
-      const data = await assetsApi.getDiagnosis(publicKey.toBase58())
+      const data = await assetsApi.getDiagnosis(publicKey.toBase58(), network)
       setDiagnosis(data)
     } catch (err) {
       console.error('Failed to fetch diagnosis:', err)
@@ -90,8 +96,82 @@ export default function DashboardPage() {
     }
   }
 
-  // 转换为 AssetCard 格式
-  const displayAssets = walletAssets
+  const fetchStrategies = async () => {
+    if (!publicKey) return
+
+    try {
+      const data = await strategyApi.listStrategies(publicKey.toBase58())
+      setStrategies(data.strategies || [])
+    } catch (err) {
+      console.error('Failed to fetch strategies:', err)
+    }
+  }
+
+  useEffect(() => {
+    strategyApi
+      .getCapabilities()
+      .then(setCapabilities)
+      .catch((err) => console.error('Failed to load capabilities:', err))
+  }, [])
+
+  const getExecutionPresentation = (strategy: Strategy) => {
+    const protocolKey = (strategy.protocol_name || '').toLowerCase()
+    const capability = capabilities?.protocols?.[protocolKey]
+    const realExecutable =
+      capability?.wallet_signature && network === 'mainnet' && !capabilities?.demo_mode
+
+    let executionLabel = '查看执行详情'
+    let executionHint = '进入详情页查看当前策略的执行结果与下一步动作。'
+
+    if (capabilities?.demo_mode) {
+      executionLabel = '查看演示预览'
+      executionHint = '当前为 DEMO 演示模式，执行页会展示完整预览闭环。'
+    } else if (realExecutable) {
+      executionLabel = '尝试拉起钱包'
+      executionHint = '当前协议支持主网签名链路，可在详情页尝试生成待签名交易。'
+    } else if (network === 'devnet') {
+      executionLabel = '查看开发网预览'
+      executionHint = '开发网下默认展示参数预览、风控提示与费用估计。'
+    } else if (capability?.notes) {
+      executionLabel = '查看参数预览'
+      executionHint = capability.notes
+    }
+
+    return {
+      executionLabel,
+      executionHint,
+      primaryActionLabel: executionLabel,
+      statusLabel: `状态 · ${strategy.status}`,
+    }
+  }
+
+  const convertStrategyToCardProps = (strategy: Strategy) => ({
+    id: strategy.id,
+    name: strategy.title || '投资策略',
+    protocol: strategy.protocol_name || 'DeFi Protocol',
+    expectedAPY: strategy.estimated_apy || 0,
+    riskLevel: strategy.risk_level === 'conservative' ? 'low' as const :
+               strategy.risk_level === 'balanced' ? 'medium' as const : 'high' as const,
+    lockPeriod: '灵活',
+    steps: strategy.steps?.map(s => s.description) || [],
+    deployed: strategy.status === 'approved' || strategy.status === 'executed',
+    deployedAmount: strategy.input_amount || 0,
+    detailsHref: `/strategy/${strategy.id}`,
+    actionHref: `/strategy/${strategy.id}`,
+    ...getExecutionPresentation(strategy),
+  })
+
+  type DisplayAsset = {
+    id: string
+    icon: string
+    symbol: string
+    name: string
+    amount: number
+    value: number
+    change24h: number
+  }
+
+  const displayAssets: DisplayAsset[] = walletAssets
     ? [
         {
           id: 'sol',
@@ -100,7 +180,7 @@ export default function DashboardPage() {
           name: 'Solana',
           amount: walletAssets.sol_balance,
           value: walletAssets.sol_value_usd,
-          change24h: 0, // TODO: 需要历史价格数据
+          change24h: 0,
         },
         ...walletAssets.tokens.map((token) => ({
           id: token.mint,
@@ -109,12 +189,12 @@ export default function DashboardPage() {
           name: token.name,
           amount: token.balance,
           value: token.usd_value,
-          change24h: 0, // TODO: 需要历史价格数据
+          change24h: 0,
         })),
       ]
-    : mockAssets
+    : []
 
-  const totalValue = walletAssets?.total_value_usd || mockPortfolioStats.totalValue
+  const totalValue = walletAssets?.total_value_usd || 0
 
   const tabs = [
     { id: 'overview' as TabType, name: '资产总览' },
@@ -176,28 +256,43 @@ export default function DashboardPage() {
           </Card>
         )}
 
+        {connected && walletAssets?.network_hint && (
+          <Card className="mb-8 border border-yellow-500/30 bg-yellow-500/10 p-6">
+            <div className="flex items-start gap-4">
+              <span className="text-2xl">🌐</span>
+              <div className="flex-1">
+                <h3 className="mb-1 font-semibold text-white">检测到网络不一致</h3>
+                <p className="text-sm text-gray-300">{walletAssets.network_hint}</p>
+                <p className="mt-2 text-xs text-gray-400">
+                  如果你想查看这笔资产，请用 devnet 启动后端，或把钱包切换到主网资产地址。
+                </p>
+              </div>
+            </div>
+          </Card>
+        )}
+
         {/* Stats Cards */}
         <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
           <StatCard
             title={t('dashboard.totalValue')}
             value={`$${totalValue.toLocaleString()}`}
-            change={mockPortfolioStats.change24h}
-            trend={mockPortfolioStats.change24h >= 0 ? 'up' : 'down'}
+            change={pnl ? pnl.total_pnl_percentage : 0}
+            trend={pnl && pnl.total_pnl >= 0 ? 'up' : 'down'}
             icon="💰"
           />
           <StatCard
             title={t('dashboard.todayProfit')}
-            value={`$${mockPortfolioStats.changeValue.toLocaleString()}`}
-            change={mockPortfolioStats.change24h}
-            trend={mockPortfolioStats.change24h >= 0 ? 'up' : 'down'}
+            value={pnl ? `${pnl.total_pnl >= 0 ? '+' : ''}$${pnl.total_pnl.toFixed(2)}` : '$0.00'}
+            change={pnl ? pnl.roi_percentage : 0}
+            trend={pnl && pnl.total_pnl >= 0 ? 'up' : 'down'}
             icon="📈"
           />
           <StatCard
             title={t('dashboard.activeStrategies')}
-            value={mockStrategies.filter((s) => s.deployed).length}
+            value={strategies.filter((s: Strategy) => s.status === 'approved' || s.status === 'executed').length}
             icon="⚡"
           />
-          <StatCard title={t('dashboard.riskLevel')} value={t('common.low')} icon="🛡️" />
+          <StatCard title={t('dashboard.riskLevel')} value={diagnosis?.risk_level || t('common.low')} icon="🛡️" />
         </div>
 
         {/* Tabs */}
@@ -232,7 +327,7 @@ export default function DashboardPage() {
                   查看全部 →
                 </button>
               </div>
-              <div className="space-y-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {displayAssets.map((asset) => (
                   <AssetCard key={asset.id} {...asset} />
                 ))}
@@ -260,13 +355,32 @@ export default function DashboardPage() {
                   查看全部 →
                 </button>
               </div>
-              <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {mockStrategies
-                  .filter((s) => s.deployed)
-                  .map((strategy) => (
-                    <StrategyCard key={strategy.id} {...strategy} />
-                  ))}
-              </div>
+              {connected && strategies.length > 0 ? (
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+                  {strategies
+                    .filter((s) => s.status === 'approved' || s.status === 'executed')
+                    .slice(0, 3)
+                    .map((strategy) => (
+                      <StrategyCard key={strategy.id} {...convertStrategyToCardProps(strategy)} />
+                    ))}
+                </div>
+              ) : connected ? (
+                <Card className="p-6">
+                  <div className="text-center">
+                    <span className="text-4xl">📊</span>
+                    <h3 className="mt-4 text-lg font-semibold text-white">暂无活跃策略</h3>
+                    <p className="mt-2 text-sm text-gray-400">前往策略中心生成您的第一个策略</p>
+                  </div>
+                </Card>
+              ) : (
+                <Card className="p-6">
+                  <div className="text-center">
+                    <span className="text-4xl">📊</span>
+                    <h3 className="mt-4 text-lg font-semibold text-white">暂无活跃策略</h3>
+                    <p className="mt-2 text-sm text-gray-400">请先连接钱包，然后前往策略中心生成策略</p>
+                  </div>
+                </Card>
+              )}
             </div>
           </div>
         )}

@@ -25,8 +25,10 @@ class WalletService:
         self,
         rpc_client: Optional[EnhancedRPCClient] = None,
         jupiter: Optional[JupiterProvider] = None,
+        network: Optional[str] = None,
     ):
-        self._rpc = rpc_client or EnhancedRPCClient()
+        self._network = network or config.NETWORK
+        self._rpc = rpc_client or EnhancedRPCClient(rpc_urls=config.get_rpc_endpoints(self._network))
         self._jupiter = jupiter or JupiterProvider()
         self._owns_clients = rpc_client is None
 
@@ -80,7 +82,7 @@ class WalletService:
             logger.warning(f"批量价格查询失败: {e}")
 
         # 构建已知代币符号映射
-        tokens_map = config.get_tokens()
+        tokens_map = config.get_tokens(self._network)
         symbol_map = {v: k for k, v in tokens_map.items()}
 
         accounts = []

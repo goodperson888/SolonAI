@@ -12,12 +12,14 @@ import {
   type RiskAlert,
   type Authorization,
 } from '@/lib/api-client'
+import { useSolanaNetwork } from '@/components/wallet/NetworkContext'
 
 type TabType = 'overview' | 'authorizations' | 'alerts' | 'transactions'
 
 export default function RiskControlPage() {
   const { t: _t } = useTranslation()
   const { publicKey } = useWallet()
+  const { network } = useSolanaNetwork()
   const [activeTab, setActiveTab] = useState<TabType>('overview')
   const [assessment, setAssessment] = useState<RiskAssessment | null>(null)
   const [transactions, setTransactions] = useState<Transaction[]>([])
@@ -29,7 +31,7 @@ export default function RiskControlPage() {
     if (publicKey) {
       loadData()
     }
-  }, [publicKey, activeTab])
+  }, [publicKey, activeTab, network])
 
   const loadData = async () => {
     if (!publicKey) return
@@ -40,7 +42,7 @@ export default function RiskControlPage() {
 
       if (activeTab === 'overview') {
         const [assessmentData, transactionsData] = await Promise.all([
-          riskApi.assessment(walletAddress),
+          riskApi.assessment(walletAddress, network),
           riskApi.transactions(walletAddress, 10),
         ])
         setAssessment(assessmentData)
@@ -52,7 +54,7 @@ export default function RiskControlPage() {
         const data = await riskApi.alerts(walletAddress)
         setAlerts(data.alerts || [])
       } else if (activeTab === 'authorizations') {
-        const data = await riskApi.authorizations(walletAddress)
+        const data = await riskApi.authorizations(walletAddress, network)
         setAuthorizations(data.authorizations || [])
       }
     } catch (error) {
@@ -128,6 +130,7 @@ export default function RiskControlPage() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-white">风控审计中心</h1>
           <p className="mt-2 text-gray-400">全方位保护您的链上资产安全</p>
+          <p className="mt-1 text-sm text-gray-500">当前网络: {network}</p>
         </div>
 
         {/* Tab Navigation */}

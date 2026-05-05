@@ -5,6 +5,7 @@ DataAggregationAgent - 数据聚合
 集成真实的 Solana 区块链数据。
 """
 
+import asyncio
 import os
 import sys
 from typing import Any, Dict
@@ -65,6 +66,15 @@ class DataAggregationAgent(BaseAgent):
         """从文件加载 system prompt"""
         return get_prompt("data_aggregation_agent", language="zh", version="v1")
 
+    @staticmethod
+    def _sum_wallet_assets(wallet_assets: list[dict]) -> float:
+        total = 0.0
+        for asset in wallet_assets:
+            total += float(
+                asset.get("usd_value", asset.get("value_usd", 0)) or 0
+            )
+        return total
+
     # 原 prompt 已移至 prompts/data_aggregation_agent_zh_v1.txt
     # 如需修改 prompt，请编辑该文件
 
@@ -85,7 +95,10 @@ class DataAggregationAgent(BaseAgent):
 
             try:
                 # 获取 SOL 余额
-                sol_balance = await solana_client.get_sol_balance(wallet_address)
+                sol_balance = await asyncio.wait_for(
+                    solana_client.get_sol_balance(wallet_address),
+                    timeout=6,
+                )
                 print(f"[DataAggregationAgent] 钱包地址: {wallet_address}")
                 print(f"[DataAggregationAgent] SOL 余额: {sol_balance}")
 
@@ -96,8 +109,14 @@ class DataAggregationAgent(BaseAgent):
                 # conservative zero value rather than stale hard-coded prices.
                 defi_service = DeFiAggregationService()
                 try:
-                    prices = await defi_service.get_realtime_prices()
+                    prices = await asyncio.wait_for(
+                        defi_service.get_realtime_prices(),
+                        timeout=6,
+                    )
                     sol_price = prices.get("SOL", {}).get("price_usd") or 0
+                except asyncio.TimeoutError:
+                    print("[DataAggregationAgent] 获取实时价格超时，使用 0 价格降级")
+                    sol_price = 0
                 finally:
                     await defi_service.close()
 
@@ -109,8 +128,10 @@ class DataAggregationAgent(BaseAgent):
                     wallet_assets.append(
                         {
                             "token": "SOL",
+                            "symbol": "SOL",
                             "balance": sol_balance,
                             "price_usd": sol_price,
+                            "usd_value": sol_balance * sol_price,
                             "value_usd": sol_balance * sol_price,
                         }
                     )
@@ -124,7 +145,10 @@ class DataAggregationAgent(BaseAgent):
                 try:
                     wallet_service = WalletService()
                     try:
-                        portfolio = await wallet_service.get_wallet_portfolio(wallet_address)
+                        portfolio = await asyncio.wait_for(
+                            wallet_service.get_wallet_portfolio(wallet_address),
+                            timeout=8,
+                        )
                     finally:
                         await wallet_service.close()
 
@@ -132,6 +156,7 @@ class DataAggregationAgent(BaseAgent):
                         wallet_assets.append(
                             {
                                 "token": token.symbol or token.mint[:8],
+                                "symbol": token.symbol or token.mint[:8],
                                 "mint": token.mint,
                                 "balance": float(token.balance),
                                 "price_usd": (
@@ -139,16 +164,19 @@ class DataAggregationAgent(BaseAgent):
                                     if token.usd_value and token.balance
                                     else 0
                                 ),
+                                "usd_value": float(token.usd_value or 0),
                                 "value_usd": float(token.usd_value or 0),
                             }
                         )
-                    state["total_value_usd"] = float(portfolio.total_usd_value)
+                    state["total_value_usd"] = float(portfolio.total_usd_value or 0)
                 except Exception as e:
                     print(f"[DataAggregationAgent] Token 资产聚合失败，保留 SOL 数据: {e}")
                     state["total_value_usd"] = sol_balance * sol_price
 
                 print(f"[DataAggregationAgent] 最终资产列表: {wallet_assets}")
                 state["wallet_assets"] = wallet_assets
+                if state.get("total_value_usd", 0) <= 0:
+                    state["total_value_usd"] = self._sum_wallet_assets(wallet_assets)
 
             except Exception as e:
                 print(f"Error fetching wallet assets: {e}")
@@ -169,7 +197,7 @@ class DataAggregationAgent(BaseAgent):
         try:
             defi_service = DeFiAggregationService()
             try:
-                overview = await defi_service.get_overview()
+                overview = await asyncio.wait_for(defi_service.get_overview(), timeout=8)
             finally:
                 await defi_service.close()
             state["protocol_data"] = overview.get("yields", {}).get("protocols", {})

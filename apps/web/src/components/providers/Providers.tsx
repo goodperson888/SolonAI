@@ -7,6 +7,7 @@ import { I18nProvider } from '@/hooks/useTranslation'
 import { Header } from '@/components/layout/Header'
 import { Footer } from '@/components/layout/Footer'
 import { FloatingAIButton } from '@/components/chat/FloatingAIButton'
+import { NetworkProvider } from '@/components/wallet/NetworkContext'
 
 const WalletProviderDynamic = dynamic(
   () =>
@@ -24,14 +25,18 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   return (
     <I18nProvider>
       <QueryProvider>
-        <WalletProviderDynamic>
-          <div className={isAIPage ? 'flex h-screen flex-col overflow-hidden' : ''}>
-            <Header />
-            <main className={isAIPage ? 'flex-1 overflow-hidden' : 'min-h-screen'}>{children}</main>
-            {!hideFooter && <Footer />}
-          </div>
-          <FloatingAIButton />
-        </WalletProviderDynamic>
+        <NetworkProvider>
+          <WalletProviderDynamic>
+            <div className={isAIPage ? 'flex h-screen flex-col overflow-hidden' : ''}>
+              <Header />
+              <main className={isAIPage ? 'flex-1 overflow-hidden' : 'min-h-screen'}>
+                {children}
+              </main>
+              {!hideFooter && <Footer />}
+            </div>
+            <FloatingAIButton />
+          </WalletProviderDynamic>
+        </NetworkProvider>
       </QueryProvider>
     </I18nProvider>
   )

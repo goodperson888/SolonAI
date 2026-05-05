@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     ALLOWED_ORIGINS: List[str] = [
         "http://localhost:3000",
         "http://localhost:3001",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:3001",
         "https://*.vercel.app",
     ]
 
@@ -38,6 +40,7 @@ class Settings(BaseSettings):
     CACHE_TTL_STRATEGY: int = 300
     CACHE_TTL_RISK: int = 180
     DEFI_REFRESH_INTERVAL_SECONDS: int = 120
+    SOLON_DEMO_MODE: bool = False
 
     # JWT配置
     SECRET_KEY: str = "your-secret-key-change-in-production"
@@ -45,7 +48,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
     # Solana配置
-    SOLANA_RPC_URL: str = "https://api.devnet.solana.com"
+    SOLANA_RPC_URL: str = "https://api.mainnet-beta.solana.com"
     ALCHEMY_API_KEY: str = ""
 
     # AI模型配置

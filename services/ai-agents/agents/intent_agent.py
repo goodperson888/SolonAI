@@ -52,14 +52,60 @@ class IntentAgent(BaseAgent):
 
         result = await self.call_llm_json(user_input, chat_history)
 
+        normalized_input = user_input.lower()
+        strategy_keywords = [
+            "策略",
+            "推荐",
+            "收益",
+            "理财",
+            "defi",
+            "稳健",
+            "保守",
+            "年化",
+            "apy",
+        ]
+        should_force_strategy = any(keyword in normalized_input for keyword in strategy_keywords)
+        conservative_keywords = ["保守", "稳健", "低风险", "稳一点"]
+
         if result.get("parse_error"):
             # JSON 解析失败，默认当作普通聊天
-            state["intent"] = "chat"
-            state["intent_params"] = {}
-            print("[IntentAgent] ❌ JSON 解析失败，默认为 chat")
+            if should_force_strategy:
+                state["intent"] = "generate_strategy"
+                state["intent_params"] = {
+                    "risk_level": (
+                        "conservative"
+                        if any(keyword in user_input for keyword in conservative_keywords)
+                        else "balanced"
+                    ),
+                    "token": "SOL",
+                }
+                print("[IntentAgent] ❌ JSON 解析失败，但命中策略关键词，强制识别为 generate_strategy")
+            else:
+                state["intent"] = "chat"
+                state["intent_params"] = {}
+                print("[IntentAgent] ❌ JSON 解析失败，默认为 chat")
         else:
             state["intent"] = result.get("intent", "chat")
             state["intent_params"] = result.get("params", {})
+            if state["intent"] == "generate_strategy" and any(
+                keyword in user_input for keyword in conservative_keywords
+            ):
+                current_risk = state["intent_params"].get("risk_level")
+                if current_risk in (None, "", "balanced", "moderate"):
+                    state["intent_params"]["risk_level"] = "conservative"
+            if state["intent"] == "chat" and should_force_strategy:
+                state["intent"] = "generate_strategy"
+                state["intent_params"] = {
+                    **state["intent_params"],
+                    "risk_level": state["intent_params"].get("risk_level")
+                    or (
+                        "conservative"
+                        if any(keyword in user_input for keyword in conservative_keywords)
+                        else "balanced"
+                    ),
+                    "token": state["intent_params"].get("token", "SOL"),
+                }
+                print("[IntentAgent] ⚠️ LLM 判成 chat，但命中策略关键词，修正为 generate_strategy")
             print(f"[IntentAgent] ✓ 识别意图: {state['intent']}")
             print(f"[IntentAgent] ✓ 参数: {state['intent_params']}")
             if result.get("reasoning"):

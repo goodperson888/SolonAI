@@ -12,14 +12,14 @@ langsmith==0.2.11
 openai==1.109.1
 
 # 向量检索（RAG 用）
-faiss-cpu==1.13.2
+faiss-cpu==1.13.0
 
 # 数据库
 aiosqlite==0.20.0
 
 # 数据模型
-pydantic==2.13.2
-pydantic-settings==2.13.1
+pydantic==2.11.7
+pydantic-settings==2.11.0
 
 # 环境变量
 python-dotenv==1.0.0

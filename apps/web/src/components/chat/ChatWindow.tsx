@@ -5,7 +5,7 @@ import { useWallet } from '@solana/wallet-adapter-react'
 import { Button } from '@/components/ui/Button'
 import { MessageBubble } from './MessageBubble'
 import { useTranslation } from '@/hooks/useTranslation'
-import { chatApi, type ChatMessageItem } from '@/lib/api-client'
+import { chatApi, strategyApi, type ChatMessageData, type ChatMessageItem } from '@/lib/api-client'
 
 interface Message {
   id: string
@@ -13,7 +13,7 @@ interface Message {
   content: string
   timestamp: Date
   intent?: string
-  data?: Record<string, unknown>
+  data?: ChatMessageData
 }
 
 const STORAGE_KEY_PREFIX = 'solon-ai:chat:'
@@ -30,6 +30,7 @@ function fromApiMessage(message: ChatMessageItem): Message {
     content: message.content,
     timestamp: new Date(message.created_at),
     intent: message.intent,
+    data: message.extra_data,
   }
 }
 
@@ -42,6 +43,8 @@ export const ChatWindow: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false)
   const [isLoadingHistory, setIsLoadingHistory] = useState(true)
   const [sessionId, setSessionId] = useState('')
+  const [approvingThreadId, setApprovingThreadId] = useState<string | null>(null)
+  const [savingStrategyMessageId, setSavingStrategyMessageId] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // 自动滚动到底部
@@ -182,6 +185,87 @@ export const ChatWindow: React.FC = () => {
     }
   }
 
+  const handleQuickAction = (prompt: string) => {
+    setInput(prompt)
+  }
+
+  const handleApprovalAction = async (threadId: string, approved: boolean) => {
+    setApprovingThreadId(threadId)
+    try {
+      const result = await chatApi.approveAction(threadId, approved)
+      const aiMessage: Message = {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: result.reply,
+        timestamp: new Date(),
+        intent: result.intent,
+        data: result.data,
+      }
+      setMessages((prev) => [
+        ...prev.map((message) =>
+          message.data?.thread_id === threadId
+            ? {
+                ...message,
+                data: {
+                  ...message.data,
+                  interrupted: false,
+                  approval_preview: undefined,
+                },
+              }
+            : message
+        ),
+        aiMessage,
+      ])
+    } catch (error) {
+      console.error('Approval action failed:', error)
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: approved
+            ? '这条 AI 执行请求已经失效或已处理，先重新生成一版策略再确认。'
+            : '这条 AI 取消请求没有成功提交，可能当前线程已经结束。',
+          timestamp: new Date(),
+        },
+      ])
+    } finally {
+      setApprovingThreadId(null)
+    }
+  }
+
+  const handleSaveStrategy = async (messageId: string, data: ChatMessageData, content: string) => {
+    if (!walletAddress || !data.strategy) return
+
+    setSavingStrategyMessageId(messageId)
+    try {
+      const saved = await strategyApi.saveStrategyDraft({
+        wallet_address: walletAddress,
+        strategy: data.strategy,
+        risk_assessment: data.risk_assessment,
+        summary: content,
+      })
+
+      setMessages((prev) =>
+        prev.map((message) =>
+          message.id === messageId
+            ? {
+                ...message,
+                data: {
+                  ...message.data,
+                  saved_strategy_id: saved.id,
+                },
+              }
+            : message
+        )
+      )
+    } catch (error) {
+      console.error('Save strategy failed:', error)
+    } finally {
+      setSavingStrategyMessageId(null)
+    }
+  }
+
   return (
     <div className="flex h-full flex-col">
       {/* Messages */}
@@ -218,7 +302,17 @@ export const ChatWindow: React.FC = () => {
             </div>
           </div>
         ) : (
-          messages.map((message) => <MessageBubble key={message.id} message={message} />)
+          messages.map((message) => (
+            <MessageBubble
+              key={message.id}
+              message={message}
+              onQuickAction={handleQuickAction}
+              onApprovalAction={handleApprovalAction}
+              onSaveStrategy={walletAddress ? handleSaveStrategy : undefined}
+              savingStrategyMessageId={savingStrategyMessageId}
+              approvingThreadId={approvingThreadId}
+            />
+          ))
         )}
         {isLoading && (
           <div className="flex items-center space-x-2 text-gray-400">

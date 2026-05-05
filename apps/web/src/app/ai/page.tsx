@@ -1,10 +1,19 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { useWallet } from '@solana/wallet-adapter-react'
+import { useConnection, useWallet } from '@solana/wallet-adapter-react'
+import { VersionedTransaction } from '@solana/web3.js'
 import { Button } from '@/components/ui/Button'
 import { MessageBubble } from '@/components/chat/MessageBubble'
-import { chatApi, knowledgeApi, type KnowledgeDocument } from '@/lib/api-client'
+import {
+  chatApi,
+  knowledgeApi,
+  strategyApi,
+  type ChatCardPatchEvent,
+  type ChatMessageData,
+  type KnowledgeDocument,
+} from '@/lib/api-client'
+import { useSolanaNetwork } from '@/components/wallet/NetworkContext'
 import { Upload, FileText, Trash2, MessageSquare, BookOpen, X } from 'lucide-react'
 
 interface RagSource {
@@ -17,7 +26,7 @@ interface Message {
   content: string
   timestamp: Date
   intent?: string
-  data?: Record<string, unknown>
+  data?: ChatMessageData
   ragSources?: RagSource[]
   agentStatus?: {
     agent: string
@@ -34,8 +43,63 @@ interface Conversation {
   timestamp: string
 }
 
+type ApprovalExecutionResult = {
+  reply: string
+  data?: ChatMessageData
+}
+
+function buildApprovalReplyData(data: ChatMessageData | undefined): ChatMessageData | undefined {
+  if (!data) return undefined
+
+  const sanitized: ChatMessageData = {}
+
+  if (data.transaction) {
+    sanitized.transaction = data.transaction
+  }
+  if (data.saved_strategy_id) {
+    sanitized.saved_strategy_id = data.saved_strategy_id
+  }
+  if (data.thread_id) {
+    sanitized.thread_id = data.thread_id
+  }
+
+  return Object.keys(sanitized).length > 0 ? sanitized : undefined
+}
+
+function mergeMessageData(
+  currentData: ChatMessageData | undefined,
+  patchData: ChatMessageData | undefined
+): ChatMessageData | undefined {
+  if (!currentData && !patchData) return undefined
+
+  return {
+    ...(currentData || {}),
+    ...(patchData || {}),
+    strategy: patchData?.strategy ?? currentData?.strategy,
+    risk_assessment: patchData?.risk_assessment ?? currentData?.risk_assessment,
+    wallet_assets: patchData?.wallet_assets ?? currentData?.wallet_assets,
+    transaction: patchData?.transaction ?? currentData?.transaction,
+    stream_progress: {
+      ...(currentData?.stream_progress || {}),
+      ...(patchData?.stream_progress || {}),
+    },
+    validation: patchData?.validation ?? currentData?.validation,
+    approval_preview:
+      patchData?.approval_preview === undefined
+        ? currentData?.approval_preview
+        : patchData.approval_preview,
+    interrupted: patchData?.interrupted ?? currentData?.interrupted,
+    thread_id: patchData?.thread_id ?? currentData?.thread_id,
+    total_value_usd: patchData?.total_value_usd ?? currentData?.total_value_usd,
+    monitoring: patchData?.monitoring ?? currentData?.monitoring,
+    saved_strategy_id: currentData?.saved_strategy_id,
+  }
+}
+
 export default function AIAssistantPage() {
-  const { connected, publicKey } = useWallet()
+  const { connected, publicKey, sendTransaction } = useWallet()
+  const { connection } = useConnection()
+  const { network } = useSolanaNetwork()
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [activeConversationId, setActiveConversationId] = useState<string>('')
   const [inputMessage, setInputMessage] = useState('')
@@ -43,6 +107,8 @@ export default function AIAssistantPage() {
   const [leftPanelMode, setLeftPanelMode] = useState<'conversations' | 'knowledge'>('conversations')
   const [knowledgeDocs, setKnowledgeDocs] = useState<KnowledgeDocument[]>([])
   const [uploading, setUploading] = useState(false)
+  const [approvingThreadId, setApprovingThreadId] = useState<string | null>(null)
+  const [savingStrategyMessageId, setSavingStrategyMessageId] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   // 用 ref 追踪 activeConversationId，避免闭包问题
@@ -123,9 +189,38 @@ export default function AIAssistantPage() {
           content: m.content,
           timestamp: new Date(m.created_at),
           intent: m.intent,
+          data: m.extra_data,
         }))
+
+        const normalized = await Promise.all(
+          parsed.map(async (message) => {
+            const threadId = message.data?.thread_id
+            if (!threadId || message.data?.interrupted !== true) {
+              return message
+            }
+
+            try {
+              const threadState = await chatApi.getThreadState(threadId)
+              if (!threadState.interrupted) {
+                return {
+                  ...message,
+                  data: {
+                    ...message.data,
+                    interrupted: false,
+                    approval_preview: undefined,
+                  },
+                }
+              }
+            } catch (error) {
+              console.error('Failed to validate thread state:', error)
+            }
+
+            return message
+          })
+        )
+
         setConversations((prev) =>
-          prev.map((conv) => (conv.sessionId === sessionId ? { ...conv, messages: parsed } : conv))
+          prev.map((conv) => (conv.sessionId === sessionId ? { ...conv, messages: normalized } : conv))
         )
       }
     } catch {
@@ -299,6 +394,7 @@ export default function AIAssistantPage() {
 
                     // 只保留当前正在执行的状态
                     if (status.status === 'running') {
+                      applyProgressSkeleton(currentActiveId, aiMessageId, status.agent)
                       return { ...msg, agentStatus: [status] }
                     } else {
                       // done 状态不显示
@@ -318,12 +414,19 @@ export default function AIAssistantPage() {
                   ...conv,
                   messages: conv.messages.map((msg) =>
                     msg.id === aiMessageId
-                      ? { ...msg, intent: result.intent, data: result.data || undefined }
+                      ? {
+                          ...msg,
+                          intent: result.intent,
+                          data: mergeMessageData(msg.data, result.data || undefined),
+                        }
                       : msg
                   ),
                 }
               })
             )
+          },
+          onCardPatch: (patch) => {
+            applyCardPatch(currentActiveId, aiMessageId, patch)
           },
           onDone: () => {
             setIsLoading(false)
@@ -385,6 +488,284 @@ export default function AIAssistantPage() {
 
   const handleQuickAction = (text: string) => {
     setInputMessage(text)
+  }
+
+  function applyCardPatch(conversationId: string, messageId: string, patch: ChatCardPatchEvent) {
+    setConversations((prev) =>
+      prev.map((conv) => {
+        if (conv.id !== conversationId) return conv
+        return {
+          ...conv,
+          messages: conv.messages.map((msg) =>
+            msg.id === messageId
+              ? {
+                  ...msg,
+                  intent: patch.intent || msg.intent,
+                  data: mergeMessageData(msg.data, patch.data),
+                }
+              : msg
+          ),
+        }
+      })
+    )
+  }
+
+  function applyProgressSkeleton(conversationId: string, messageId: string, agent: string) {
+    const progressPatch: ChatMessageData = {
+      stream_progress: {},
+    }
+
+    if (agent === 'strategy') {
+      progressPatch.stream_progress = { strategy: true }
+      progressPatch.strategy = {
+        title: '正在生成策略...',
+        strategy_name: '正在生成策略...',
+        protocol: '分析中',
+        steps: [],
+      }
+    } else if (agent === 'risk') {
+      progressPatch.stream_progress = { risk_assessment: true }
+      progressPatch.risk_assessment = {
+        risk_level: 'analyzing',
+        warnings: [],
+      }
+    } else if (agent === 'data') {
+      progressPatch.stream_progress = { wallet_assets: true }
+      progressPatch.wallet_assets = []
+      progressPatch.total_value_usd = 0
+    } else if (agent === 'validation' || agent === 'workflow') {
+      progressPatch.stream_progress = { approval_preview: true }
+      progressPatch.approval_preview = {
+        message: '正在整理执行前确认信息...',
+        steps: [],
+      }
+    } else {
+      return
+    }
+
+    applyCardPatch(conversationId, messageId, {
+      card: agent,
+      intent: 'chat',
+      intent_params: {},
+      data: progressPatch,
+    })
+  }
+
+  async function tryExecuteApprovedStrategy(
+    threadId: string,
+    conversationId: string
+  ): Promise<ApprovalExecutionResult> {
+    if (!publicKey) {
+      return { reply: '已确认执行，但当前未连接钱包，所以还不能发起签名。' }
+    }
+
+    const conversation = conversations.find((conv) => conv.id === conversationId)
+    const sourceMessage = conversation?.messages.find((message) => message.data?.thread_id === threadId)
+    const sourceData = sourceMessage?.data
+    if (!sourceData?.strategy) {
+      return { reply: '已确认执行，但当前消息里没有找到可执行策略草案。' }
+    }
+
+    let strategyId = sourceData.saved_strategy_id
+    if (!strategyId) {
+      const saved = await strategyApi.saveStrategyDraft({
+        wallet_address: publicKey.toBase58(),
+        strategy: sourceData.strategy,
+        risk_assessment: sourceData.risk_assessment,
+        summary: sourceMessage?.content,
+      })
+      strategyId = saved.id
+
+      setConversations((prev) =>
+        prev.map((conv) =>
+          conv.id === conversationId
+            ? {
+                ...conv,
+                messages: conv.messages.map((message) =>
+                  message.data?.thread_id === threadId
+                    ? {
+                        ...message,
+                        data: {
+                          ...message.data,
+                          saved_strategy_id: saved.id,
+                        },
+                      }
+                    : message
+                ),
+              }
+            : conv
+        )
+      )
+    }
+
+    const tx = await strategyApi.executeStrategy(strategyId, publicKey.toBase58(), network, 'auto')
+    const serializedTx = tx.tx_payload?.swap_transaction_base64
+    const txData: ChatMessageData = {
+      transaction: {
+        id: tx.id,
+        tx_type: tx.tx_type,
+        status: tx.status,
+        network: tx.network,
+        execution_mode: tx.execution_mode,
+        tx_payload: tx.tx_payload,
+        simulation_result: tx.simulation_result,
+      },
+    }
+
+    if (typeof serializedTx !== 'string' || !serializedTx) {
+      if (tx.tx_payload?.simulation_only) {
+        return {
+          reply:
+            '已确认执行，当前策略先生成了模拟/预览结果，所以不会拉起钱包。你可以去策略工作台继续执行。',
+          data: txData,
+        }
+      }
+      return {
+        reply:
+          '已确认执行，但当前还没有生成可签名交易，所以这次不会拉起钱包。你可以去策略工作台继续执行。',
+        data: txData,
+      }
+    }
+
+    const raw = Uint8Array.from(atob(serializedTx), (char) => char.charCodeAt(0))
+    const versionedTx = VersionedTransaction.deserialize(raw)
+    const signature = await sendTransaction(versionedTx, connection)
+    await connection.confirmTransaction(signature, 'confirmed')
+    const completed = await strategyApi.completePreparedTransaction(tx.id, signature, 'confirmed')
+
+    return {
+      reply: `钱包已拉起并完成签名，交易已提交：${signature.slice(0, 12)}...`,
+      data: {
+        transaction: {
+          id: completed.id,
+          tx_type: completed.tx_type,
+          status: completed.status,
+          network: completed.network,
+          execution_mode: completed.execution_mode,
+          tx_payload: completed.tx_payload,
+          simulation_result: completed.simulation_result,
+        },
+      },
+    }
+  }
+
+  const handleApprovalAction = async (threadId: string, approved: boolean) => {
+    const currentActiveId = activeIdRef.current
+    if (!currentActiveId) return
+
+    setApprovingThreadId(threadId)
+    try {
+      const result = await chatApi.approveAction(threadId, approved)
+      let reply = result.reply
+
+      if (approved) {
+        try {
+          const executionResult = await tryExecuteApprovedStrategy(threadId, currentActiveId)
+          reply = `${result.reply}\n\n${executionResult.reply}`
+          if (executionResult.data) {
+            result.data = mergeMessageData(result.data, executionResult.data)
+          }
+        } catch (executionError) {
+          console.error('Follow-up wallet execution failed:', executionError)
+          reply = `${result.reply}\n\n已确认执行，但这一步还没能成功拉起钱包。你可以去策略工作台继续执行。`
+        }
+      }
+
+      const aiMessage: Message = {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: reply,
+        timestamp: new Date(),
+        intent: result.intent,
+        data: buildApprovalReplyData(result.data),
+      }
+
+      setConversations((prev) =>
+        prev.map((conv) =>
+          conv.id === currentActiveId
+            ? {
+                ...conv,
+                messages: [
+                  ...conv.messages.map((msg) =>
+                    msg.data?.thread_id === threadId
+                      ? {
+                          ...msg,
+                          data: {
+                            ...msg.data,
+                            interrupted: false,
+                            approval_preview: undefined,
+                          },
+                        }
+                      : msg
+                  ),
+                  aiMessage,
+                ],
+                timestamp: '刚刚',
+              }
+            : conv
+        )
+      )
+    } catch (error) {
+      console.error('Approval action failed:', error)
+      const aiMessage: Message = {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: approved
+          ? '这条 AI 执行请求已经失效或已处理，先重新生成一版策略再确认。'
+          : '这条 AI 取消请求没有成功提交，可能当前线程已经结束。',
+        timestamp: new Date(),
+      }
+      setConversations((prev) =>
+        prev.map((conv) =>
+          conv.id === currentActiveId
+            ? { ...conv, messages: [...conv.messages, aiMessage], timestamp: '刚刚' }
+            : conv
+        )
+      )
+    } finally {
+      setApprovingThreadId(null)
+    }
+  }
+
+  const handleSaveStrategy = async (messageId: string, data: ChatMessageData, content: string) => {
+    const walletAddress = connected && publicKey ? publicKey.toBase58() : ''
+    const currentActiveId = activeIdRef.current
+    if (!walletAddress || !currentActiveId || !data.strategy) return
+
+    setSavingStrategyMessageId(messageId)
+    try {
+      const saved = await strategyApi.saveStrategyDraft({
+        wallet_address: walletAddress,
+        strategy: data.strategy,
+        risk_assessment: data.risk_assessment,
+        summary: content,
+      })
+
+      setConversations((prev) =>
+        prev.map((conv) =>
+          conv.id === currentActiveId
+            ? {
+                ...conv,
+                messages: conv.messages.map((msg) =>
+                  msg.id === messageId
+                    ? {
+                        ...msg,
+                        data: {
+                          ...msg.data,
+                          saved_strategy_id: saved.id,
+                        },
+                      }
+                    : msg
+                ),
+              }
+            : conv
+        )
+      )
+    } catch (error) {
+      console.error('Save strategy failed:', error)
+    } finally {
+      setSavingStrategyMessageId(null)
+    }
   }
 
   return (
@@ -614,7 +995,17 @@ export default function AIAssistantPage() {
               </div>
             </div>
           ) : (
-            messages.map((message) => <MessageBubble key={message.id} message={message} />)
+            messages.map((message) => (
+            <MessageBubble
+              key={message.id}
+              message={message}
+              onQuickAction={handleQuickAction}
+              onApprovalAction={handleApprovalAction}
+              onSaveStrategy={connected && publicKey ? handleSaveStrategy : undefined}
+              savingStrategyMessageId={savingStrategyMessageId}
+              approvingThreadId={approvingThreadId}
+            />
+            ))
           )}
           <div ref={messagesEndRef} />
         </div>
@@ -636,7 +1027,6 @@ export default function AIAssistantPage() {
                   placeholder="输入您的问题，Shift + Enter 换行..."
                   className="w-full resize-none rounded-lg border border-gray-700 bg-gray-800 px-4 py-3 text-white focus:border-indigo-500 focus:outline-none"
                   rows={3}
-                  disabled={isLoading}
                 />
               </div>
               <Button

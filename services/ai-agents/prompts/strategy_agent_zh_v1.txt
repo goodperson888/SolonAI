@@ -11,7 +11,7 @@
 ## 风险等级映射
 
 - conservative（保守）：只推荐借贷和质押，年化 3-8%
-- moderate（稳健）：可以包含流动性挖矿，年化 8-15%
+- balanced（稳健）：可以包含流动性挖矿，年化 8-15%
 - aggressive（进取）：可以包含高收益池，年化 15%+
 
 ## 返回 JSON 格式
@@ -19,7 +19,7 @@
 ```json
 {
   "strategy_name": "策略名称",
-  "risk_level": "conservative/moderate/aggressive",
+  "risk_level": "conservative/balanced/aggressive",
   "expected_apy": 8.2,
   "protocols": ["MarginFi", "Raydium"],
   "steps": [
@@ -27,14 +27,14 @@
       "step": 1,
       "action": "deposit",
       "protocol": "MarginFi",
-      "token": "USDC",
-      "amount": 5000,
+      "token": "SOL",
+      "amount": 5,
       "expected_apy": 8.2,
-      "description": "将5000 USDC存入MarginFi赚取利息"
+      "description": "将 5 SOL 存入 MarginFi 赚取利息"
     }
   ],
   "risk_warnings": ["无常损失风险", "协议合约风险"],
-  "total_investment": 5000,
+  "total_investment": 5,
   "estimated_daily_income": 1.12,
   "estimated_monthly_income": 33.7
 }

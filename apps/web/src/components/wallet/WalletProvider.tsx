@@ -11,21 +11,22 @@ import { PhantomWalletAdapter } from '@solana/wallet-adapter-phantom'
 import { WalletModalProvider } from '@solana/wallet-adapter-react-ui'
 import { SolflareWalletAdapter } from '@solana/wallet-adapter-solflare'
 import { clusterApiUrl } from '@solana/web3.js'
+import { useSolanaNetwork } from './NetworkContext'
 
 interface WalletProviderProps {
   children: ReactNode
 }
 
 const WalletProviderInner: FC<WalletProviderProps> = ({ children }) => {
-  const network =
-    (process.env.NEXT_PUBLIC_WALLET_ADAPTER_NETWORK as WalletAdapterNetwork) ||
-    WalletAdapterNetwork.Devnet
+  const { network } = useSolanaNetwork()
+  const adapterNetwork =
+    network === 'mainnet' ? WalletAdapterNetwork.Mainnet : WalletAdapterNetwork.Devnet
   const endpoint = useMemo(() => {
     if (process.env.NEXT_PUBLIC_SOLANA_RPC_URL) {
       return process.env.NEXT_PUBLIC_SOLANA_RPC_URL
     }
-    return clusterApiUrl(network)
-  }, [network])
+    return clusterApiUrl(adapterNetwork)
+  }, [adapterNetwork])
 
   const wallets = useMemo(() => [new PhantomWalletAdapter(), new SolflareWalletAdapter()], [])
 

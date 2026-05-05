@@ -109,7 +109,7 @@ export const RISK_LEVELS = {
     maxLeverage: 1.5,
     maxSlippage: 0.005, // 0.5%
   },
-  moderate: {
+  balanced: {
     label: '稳健型',
     description: '中等风险，平衡收益',
     maxLeverage: 2.5,
