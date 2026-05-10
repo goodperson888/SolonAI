@@ -1,3 +1,5 @@
+评委请移步最新分支代码查看：https://github.com/goodperson888/SolonAI/tree/fix/intent-recognition-and-data-aggregation
+
 # Solon AI
 
 > Solana生态全链路非托管AI金融智能体
